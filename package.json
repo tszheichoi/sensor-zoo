@@ -1,0 +1,29 @@
+{
+  "name": "sensor-zoo",
+  "version": "1.0.0",
+  "description": "Pure JavaScript sensor fusion algorithms: AHRS orientation filters, step counter, and tilt-compensated compass",
+  "type": "module",
+  "main": "index.js",
+  "license": "MIT",
+  "author": "Kelvin Tsz Hei Choi",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tszheichoi/sensor-zoo"
+  },
+  "keywords": [
+    "sensor-fusion",
+    "ahrs",
+    "quaternion",
+    "madgwick",
+    "mahony",
+    "ekf",
+    "kalman-filter",
+    "compass",
+    "step-counter",
+    "pedometer",
+    "imu",
+    "accelerometer",
+    "gyroscope",
+    "magnetometer"
+  ]
+}
