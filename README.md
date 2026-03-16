@@ -230,3 +230,17 @@ Adaptive step counter (windowSize=2.0, cooldown=0.35, minAmplitude=2.0) tested o
 | Irregular    | 46.8% |  56.2%   | 51.4% |
 
 The step counter performs best at the hip during regular walking. The Clemson dataset is sampled at 15 Hz (vs the 100 Hz the counter is designed for), which partly explains the higher error rates. Semi-regular and irregular gaits are challenging across all placements.
+
+## Citation
+
+If you use Sensor Zoo in your research, please cite:
+
+```bibtex
+@software{choi2025sensorzoo,
+  author    = {Kelvin, Tsz Hei Choi},
+  title     = {Sensor Zoo: Open-Source Sensor Fusion Algorithms},
+  year      = {2025},
+  url       = {https://github.com/tszheichoi/sensor-zoo},
+  note      = {ORCID: 0000-0002-5796-5263}
+}
+```
