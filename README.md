@@ -73,6 +73,18 @@ Detects footsteps from accelerometer data using an adaptive threshold that track
 update(accelX, accelY, accelZ, dt); // returns { steps }
 ```
 
+### Windowed Peak Detection
+
+Detects footsteps by finding local maxima (peaks) in low-pass-filtered acceleration magnitude within a sliding window. The algorithm maintains a ring buffer of smoothed acceleration values and checks whether the center sample exceeds all other samples in the window. Peaks are validated by minimum prominence (peak value minus window minimum must exceed a threshold) and a cooldown timer to prevent double-counting. Based on the peak-detection approach described in Brajdic & Harle (UbiComp 2013).
+
+- `windowSize` — peak detection window duration in seconds (how many samples around the center to check)
+- `cooldown` — minimum time between steps in seconds
+- `minProminence` — minimum peak-minus-trough swing (m/s²) to count as a step
+
+```js
+update(accelX, accelY, accelZ, dt); // returns { steps }
+```
+
 ## Compass
 
 ### Tilt-Compensated Compass
@@ -106,9 +118,14 @@ const result = ahrs.update(ax, ay, az, gx, gy, gz, dt, mx, my, mz);
 console.log(result.roll, result.pitch, result.yaw);
 console.log(result.gravityX, result.gravityY, result.gravityZ);
 
-// Step counting
+// Step counting (adaptive threshold)
 const stepper = new AdaptiveStepCounter(2.0, 0.35, 2.0);
 const { steps } = stepper.update(ax, ay, az, dt);
+
+// Step counting (windowed peak detection)
+import { WindowedPeakStepCounter } from "sensor-zoo";
+const peakStepper = new WindowedPeakStepCounter(0.6, 0.3, 1.5);
+const { steps: peakSteps } = peakStepper.update(ax, ay, az, dt);
 
 // Compass (using gravity from AHRS)
 const compass = new TiltCompensatedCompass(0.15);
@@ -162,7 +179,7 @@ node run.js my-recording/ --filter adaptiveThreshold         # step counting
 node run.js my-recording/ --filter tiltCompensated           # compass bearing
 ```
 
-Available filters: `madgwick`, `mahony`, `ekf`, `complementary`, `adaptiveThreshold`, `tiltCompensated`.
+Available filters: `madgwick`, `mahony`, `ekf`, `complementary`, `adaptiveThreshold`, `windowedPeak`, `tiltCompensated`.
 
 ### Output columns
 
@@ -221,7 +238,9 @@ Compass heading is most accurate during translation-only motion. Pure rotation a
 
 ### Step Counter — Clemson Dataset
 
-Adaptive step counter (windowSize=2.0, cooldown=0.35, minAmplitude=2.0) tested on the [Clemson Pedometer](http://cecas.clemson.edu/~ahoover/pedometer/) dataset (30 subjects, 15 Hz). Mean absolute error percentage:
+Both step counters tested on the [Clemson Pedometer](http://cecas.clemson.edu/~ahoover/pedometer/) dataset (30 subjects, 15 Hz). Mean absolute error percentage:
+
+**Adaptive Threshold** (windowSize=2.0, cooldown=0.35, minAmplitude=2.0):
 
 | Gait Type    | Wrist |   Hip    | Ankle |
 | ------------ | :---: | :------: | :---: |
@@ -229,7 +248,15 @@ Adaptive step counter (windowSize=2.0, cooldown=0.35, minAmplitude=2.0) tested o
 | Semi-Regular | 49.7% |  48.0%   | 34.0% |
 | Irregular    | 46.8% |  56.2%   | 51.4% |
 
-The step counter performs best at the hip during regular walking. The Clemson dataset is sampled at 15 Hz (vs the 100 Hz the counter is designed for), which partly explains the higher error rates. Semi-regular and irregular gaits are challenging across all placements.
+**Windowed Peak Detection** (windowSize=0.6, cooldown=0.3, minProminence=1.5):
+
+| Gait Type    | Wrist |   Hip    |  Ankle   |
+| ------------ | :---: | :------: | :------: |
+| Regular      | 31.7% | **4.9%** | **3.0%** |
+| Semi-Regular | 50.3% |  45.8%   |  17.6%   |
+| Irregular    | 44.9% |  53.7%   |  29.3%   |
+
+Windowed peak detection reduces overall mean absolute error from 38.3% to 31.2%, with the largest gains at the ankle (36.1% → 16.6% across all gaits). Both counters perform best at the hip during regular walking. The Clemson dataset is sampled at 15 Hz (vs the 100 Hz the counters are designed for), which partly explains the higher error rates. Semi-regular and irregular gaits are challenging across all placements.
 
 ## Citation
 

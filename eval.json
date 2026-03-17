@@ -221,11 +221,25 @@
       "Magnetic disturbances (nearby magnets, office environments) can cause persistent heading offsets"
     ],
     "dataset": "BROAD (39 trials, tilt-compensated compass with Madgwick-derived gravity)",
+    "trialTypeLabels": {
+      "translation": "Translation",
+      "rotation": "Rotation",
+      "combined": "Combined",
+      "disturbed": "Disturbed"
+    },
     "byTrialType": {
       "translation": 4.26,
       "rotation": 74.14,
       "combined": 84.81,
       "disturbed": 68.2
+    },
+    "detailedTypeLabels": {
+      "slowTranslation": "Slow Translation",
+      "fastTranslation": "Fast Translation",
+      "tappingVibration": "Tapping / Vibration",
+      "stationaryMagnet": "Stationary Magnet",
+      "attachedMagnet": "Attached Magnet",
+      "officeMixed": "Office / Mixed"
     },
     "byDetailedType": {
       "undisturbed": {
@@ -244,42 +258,84 @@
     }
   },
   "steps": {
-    "description": "Mean step count error (%), 30 subjects",
-    "metric": "Mean step count error as a percentage (negative = undercounting)",
-    "methodology": "The step counter processes 15 Hz accelerometer data from 30 subjects. Detected step counts are compared to hand-annotated ground truth step events. Error is (detected - ground_truth) / ground_truth × 100.",
+    "description": "Mean absolute step count error (%), 30 subjects",
+    "metric": "Mean absolute step count error as a percentage",
+    "methodology": "Each step counter processes 15 Hz accelerometer data from 30 subjects. Detected step counts are compared to hand-annotated ground truth step events. Error is |detected - ground_truth| / ground_truth × 100.",
     "notes": [
-      "Clemson data is 15 Hz, much lower than the 100 Hz the step counter is designed for",
+      "Clemson data is 15 Hz, much lower than the 100 Hz the step counters are designed for",
       "Hip placement gives the clearest signal; wrist and ankle placements are noisier due to arm swing and foot strike",
-      "Irregular gait (e.g. texting while walking) is challenging for all peak-detection step counters"
+      "Irregular gait (e.g. texting while walking) is challenging for all step counters",
+      "Windowed peak detection shows large improvements at the ankle across all gait types"
     ],
     "dataset": "Clemson Pedometer (30 subjects, 15 Hz, 60k+ annotated steps)",
     "url": "http://cecas.clemson.edu/~ahoover/pedometer/",
-    "byGaitAndPlacement": {
-      "regular": {
-        "wrist": -29.7,
-        "hip": -5.7,
-        "ankle": -22.8
+    "gaitLabels": {
+      "regular": "Regular",
+      "semiregular": "Semi-Regular",
+      "irregular": "Irregular"
+    },
+    "placementLabels": {
+      "wrist": "Wrist",
+      "hip": "Hip",
+      "ankle": "Ankle"
+    },
+    "adaptiveThreshold": {
+      "byGaitAndPlacement": {
+        "regular": {
+          "wrist": 29.7,
+          "hip": 5.7,
+          "ankle": 22.8
+        },
+        "semiregular": {
+          "wrist": 49.7,
+          "hip": 48.0,
+          "ankle": 34.0
+        },
+        "irregular": {
+          "wrist": 46.8,
+          "hip": 56.2,
+          "ankle": 51.4
+        }
       },
-      "semiregular": {
-        "wrist": -49.7,
-        "hip": -48.0,
-        "ankle": -34.0
+      "byGait": {
+        "regular": 19.4,
+        "semiregular": 43.9,
+        "irregular": 51.5
       },
-      "irregular": {
-        "wrist": -46.8,
-        "hip": -56.2,
-        "ankle": -51.4
+      "params": {
+        "windowSize": 2.0,
+        "cooldown": 0.35,
+        "minAmplitude": 2.0
       }
     },
-    "byGait": {
-      "regular": -19.4,
-      "semiregular": -43.9,
-      "irregular": -51.5
-    },
-    "params": {
-      "windowSize": 2.0,
-      "cooldown": 0.35,
-      "minAmplitude": 2.0
+    "windowedPeak": {
+      "byGaitAndPlacement": {
+        "regular": {
+          "wrist": 31.7,
+          "hip": 4.9,
+          "ankle": 3.0
+        },
+        "semiregular": {
+          "wrist": 50.3,
+          "hip": 45.8,
+          "ankle": 17.6
+        },
+        "irregular": {
+          "wrist": 44.9,
+          "hip": 53.7,
+          "ankle": 29.3
+        }
+      },
+      "byGait": {
+        "regular": 13.2,
+        "semiregular": 37.9,
+        "irregular": 42.6
+      },
+      "params": {
+        "windowSize": 0.6,
+        "cooldown": 0.3,
+        "minProminence": 1.5
+      }
     }
   }
 }

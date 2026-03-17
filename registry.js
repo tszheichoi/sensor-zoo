@@ -3,6 +3,7 @@ import { MadgwickFilter } from "./filters/MadgwickFilter.js";
 import { MahonyFilter } from "./filters/MahonyFilter.js";
 import { EKFFilter } from "./filters/EKFFilter.js";
 import { AdaptiveStepCounter } from "./steps/AdaptiveStepCounter.js";
+import { WindowedPeakStepCounter } from "./steps/WindowedPeakStepCounter.js";
 import { TiltCompensatedCompass } from "./compass/TiltCompensatedCompass.js";
 import {
   formatSpeed,
@@ -597,6 +598,69 @@ export const FUSION_CATEGORIES = {
             step: 0.1,
             decimals: 1,
             defaultValue: 2.0,
+          },
+        ],
+      },
+      windowedPeak: {
+        label: "Windowed Peak Detection",
+        description:
+          "Detects peaks in smoothed acceleration magnitude within a sliding window. More tolerant of varying gait patterns.",
+        inputs: {
+          required: [
+            {
+              sensor: "AccelerometerUncalibrated",
+              role: "accelerometer",
+              title: "Total Acceleration",
+              detail:
+                "Raw accelerometer including gravity, without iOS bias correction.",
+            },
+          ],
+          optional: [],
+          driverSensor: "AccelerometerUncalibrated",
+          fallbacks: { AccelerometerUncalibrated: "Accelerometer" },
+        },
+        createFilter: (params) =>
+          new WindowedPeakStepCounter(
+            params.windowSize,
+            params.cooldown,
+            params.minProminence,
+          ),
+        params: [
+          {
+            key: "windowSize",
+            stateKey: "WindowSize",
+            label: "Window Size",
+            description:
+              "Duration in seconds of the sliding window used to detect peaks. Controls how many samples around the center to check.",
+            min: 0.2,
+            max: 2.0,
+            step: 0.1,
+            decimals: 1,
+            defaultValue: 0.6,
+          },
+          {
+            key: "cooldown",
+            stateKey: "PeakCooldown",
+            label: "Cooldown",
+            description:
+              "Minimum seconds between detected steps to prevent double-counting.",
+            min: 0.15,
+            max: 1.0,
+            step: 0.05,
+            decimals: 2,
+            defaultValue: 0.3,
+          },
+          {
+            key: "minProminence",
+            stateKey: "MinProminence",
+            label: "Min Prominence",
+            description:
+              "Minimum peak-minus-trough swing (m/s²) required to register a step. Rejects noise and low-motion periods.",
+            min: 0.5,
+            max: 5.0,
+            step: 0.1,
+            decimals: 1,
+            defaultValue: 1.5,
           },
         ],
       },
