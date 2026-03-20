@@ -1,16 +1,16 @@
 # Sensor Zoo
 
-Open-source, pure JavaScript implementations of real-time sensor fusion algorithms for mobile and embedded devices. Fuses accelerometer, gyroscope, and (optionally) magnetometer data into quaternion attitude estimates, step counts, and compass headings.
+Open-source, pure JavaScript implementations of real-time sensor fusion algorithms for mobile and embedded devices. Currently three categories are supported: orientation (AHRS) and related quantities such as gravity vector and user acceleration; step counting; and compass heading.
 
 ## Why
 
 Most mobile operating systems provide built-in sensor fusion (gravity, orientation, step counting), but these are black boxes — the algorithms are undocumented, vary across vendors and OS versions, and may use private APIs or hardware unavailable to third-party code. This makes results non-reproducible and impossible to compare across devices.
 
-Sensor Zoo provides a transparent, cross-platform alternative. The goal is not to beat proprietary implementations, but to offer open algorithms whose behaviour is fully inspectable, consistent across iOS and Android, and reproducible by anyone. These are the sensor fusion algorithms used by [Sensor Logger](https://sensorlogger.app), and they work hand-in-hand with Sensor Logger's [standardisation feature](https://github.com/tszheichoi/awesome-sensor-logger/blob/main/CROSSPLATFORM.md) — iOS and Android use opposite sign conventions for sensor axes (inertial vs accelerating force) and different units, so Sensor Logger can normalise both to a common right-handed coordinate system, ensuring the same filter code produces consistent results on any device.
+Sensor Zoo provides a transparent, cross-platform alternative. The goal is not to beat proprietary implementations, but to offer open algorithms whose behaviour is fully inspectable, consistent across iOS and Android, and reproducible by anyone. These sensor fusion algorithms are optionally available in [Sensor Logger](https://sensorlogger.app), and they work hand-in-hand with Sensor Logger's [standardisation feature](https://github.com/tszheichoi/awesome-sensor-logger/blob/main/CROSSPLATFORM.md) — iOS and Android use opposite sign conventions for sensor axes (inertial vs accelerating force) and different units, so Sensor Logger can normalise both to a common right-handed coordinate system, ensuring the same filter code produces consistent results on any device.
 
 ## Orientation Filters
 
-All filters assume sensor data sampled at 100 Hz with [standardised axes and units](https://github.com/tszheichoi/awesome-sensor-logger/blob/main/CROSSPLATFORM.md) (Android right-handed convention, m/s² for acceleration, rad/s for gyroscope, µT for magnetometer).
+All filters assume sensor data sampled at 100 Hz with [standardisation](https://github.com/tszheichoi/awesome-sensor-logger/blob/main/CROSSPLATFORM.md) turned on.
 
 All orientation filters share the same output: quaternion (`qw, qx, qy, qz`), Euler angles (`roll, pitch, yaw`), gravity vector, and user acceleration (gravity removed). Each filter lazy-initialises from the first accelerometer reading and includes NaN guards that return the last known state if any input is invalid.
 
@@ -105,6 +105,12 @@ update(magX, magY, magZ, gravityX?, gravityY?, gravityZ?, dt) // returns { magne
 
 ## Usage
 
+### Via Sensor Logger
+
+Since [Sensor Logger](https://sensorlogger.app) 1.55, Sensor Zoo is built in.
+
+### Via Code
+
 ```js
 import {
   MadgwickFilter,
@@ -142,11 +148,11 @@ const { magneticBearing } = compass.update(
 
 ## Running on Your Own Data
 
-The included `run.js` script processes a [Sensor Logger](https://sensorlogger.app) recording through any filter and outputs CSV. Requires only Node.js — no dependencies.
+The included `run.js` script processes a [Sensor Logger](https://sensorlogger.app) recording exported with the Zipped CSV option through any filter and outputs CSV. Requires only Node.js — no dependencies.
 
 ### 1. Record
 
-Install [Sensor Logger](https://sensorlogger.app) on your phone. In Settings > Sensor Configuration, enable **Standardise Units & Frames** and **Uncalibrated**, then enable the sensors you need at 100 Hz:
+Install [Sensor Logger](https://sensorlogger.app) on your phone. Enable **Standardise Units & Frames** and **Uncalibrated Values**, then enable the sensors you need at 100 Hz:
 
 - **Orientation filters** need Accelerometer + Gyroscope (+ optionally Magnetometer)
 - **Step counter** needs Accelerometer
@@ -156,7 +162,7 @@ Standardisation ensures consistent axis conventions across iOS and Android. Unca
 
 ### 2. Export
 
-In Sensor Logger, export your recording. The app produces a `.zip` file. Unzip it — you'll get a directory containing one CSV per sensor:
+In Sensor Logger, export your recording in Zipped CSV format. The app produces a `.zip` file. Unzip it — you'll get a directory containing one CSV per sensor:
 
 ```
 my-recording/
