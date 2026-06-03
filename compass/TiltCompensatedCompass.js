@@ -1,10 +1,7 @@
 // Minimum gravity norm to attempt tilt compensation (m/s²).
 const MIN_GRAVITY_NORM = 0.01;
-// Flatness = uz² (squared cosine of tilt from vertical).
-// Below this, phone is nearly upright — raw XY heading is more stable.
-const FLATNESS_RAW_THRESHOLD = 0.1;
-// Above this, phone is fairly flat — tilt compensation is reliable.
-const FLATNESS_TILT_THRESHOLD = 0.5;
+// Minimum east-vector norm; guards against magnetic field parallel to gravity.
+const MIN_EAST_NORM = 0.01;
 
 export class TiltCompensatedCompass {
   constructor(smoothing) {
@@ -24,41 +21,52 @@ export class TiltCompensatedCompass {
       if (gnorm < MIN_GRAVITY_NORM) {
         heading = -Math.atan2(mx, my);
       } else {
+        // Normalized gravity (points away from Earth in accelerometer convention)
         const ux = gx / gnorm;
         const uy = gy / gnorm;
         const uz = gz / gnorm;
-        // |uz| indicates how "flat" the phone is:
-        //   |uz| ≈ 1 → flat (screen up/down), tilt compensation helps
-        //   |uz| ≈ 0 → upright (held in hand), raw heading is better
-        const flatness = uz * uz; // 0 = upright, 1 = flat
 
-        if (flatness < FLATNESS_RAW_THRESHOLD) {
-          // Phone is nearly upright — raw x/y heading is best
+        // East = normalize(cross(mag, up)) — Android getRotationMatrix convention
+        let ex = my * uz - mz * uy;
+        let ey = mz * ux - mx * uz;
+        let ez = mx * uy - my * ux;
+        const enorm = Math.sqrt(ex * ex + ey * ey + ez * ez);
+
+        if (enorm < MIN_EAST_NORM) {
+          // Magnetic field nearly parallel to gravity — cannot determine heading
           heading = -Math.atan2(mx, my);
         } else {
-          // Tilt-compensated heading via horizontal projection.
-          // Projects magnetometer onto the plane perpendicular to gravity,
-          // then measures angle relative to device forward (y-axis).
-          const mdotu = mx * ux + my * uy + mz * uz;
-          const hx = uz * mx - ux * mz;
-          const hy = my - uy * mdotu;
-          const tiltHeading = -Math.atan2(hx, hy);
+          ex /= enorm;
+          ey /= enorm;
+          ez /= enorm;
 
-          if (flatness > FLATNESS_TILT_THRESHOLD) {
-            // Phone is fairly flat — tilt compensation is reliable
-            heading = tiltHeading;
-          } else {
-            // Blend between raw and tilt-compensated
-            const rawHeading = -Math.atan2(mx, my);
-            let diff = tiltHeading - rawHeading;
-            if (diff > Math.PI) diff -= 2 * Math.PI;
-            if (diff < -Math.PI) diff += 2 * Math.PI;
-            const t = (flatness - FLATNESS_RAW_THRESHOLD) / (FLATNESS_TILT_THRESHOLD - FLATNESS_RAW_THRESHOLD);
-            heading = rawHeading + t * diff;
-          }
+          // North = cross(up, east)
+          const nx = uy * ez - uz * ey;
+          const ny = uz * ex - ux * ez;
+          const nz = ux * ey - uy * ex;
+
+          // Axis quality: how horizontal each device axis is (0 = vertical, 1 = horizontal).
+          // Since ux²+uy²+uz²=1, qy+qz = 1+ux² ≥ 1, so the denominator is always safe.
+          const qy = 1 - uy * uy;
+          const qz = 1 - uz * uz;
+
+          // Heading from device y-axis (top of phone) — reliable when phone is flat
+          const heading_y = Math.atan2(ey, ny);
+          // Heading from device -z axis (camera direction) — reliable when phone is upright
+          const heading_nz = Math.atan2(-ez, -nz);
+
+          // Circular weighted average (approximately inverse-variance weighting).
+          // When one axis is near-vertical its quality approaches zero, smoothly
+          // reducing its influence without any hard threshold discontinuity.
+          const wy = qy / (qy + qz);
+          let diff = heading_nz - heading_y;
+          if (diff > Math.PI) diff -= 2 * Math.PI;
+          if (diff < -Math.PI) diff += 2 * Math.PI;
+          heading = heading_y + (1 - wy) * diff;
         }
       }
     } else {
+      // No gravity data — flat-device fallback
       heading = -Math.atan2(mx, my);
     }
 
