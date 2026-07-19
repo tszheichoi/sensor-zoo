@@ -45,24 +45,25 @@ export class TiltCompensatedCompass {
           const ny = uz * ex - ux * ez;
           const nz = ux * ey - uy * ex;
 
-          // Axis quality: how horizontal each device axis is (0 = vertical, 1 = horizontal).
-          // Since ux²+uy²+uz²=1, qy+qz = 1+ux² ≥ 1, so the denominator is always safe.
-          const qy = 1 - uy * uy;
-          const qz = 1 - uz * uz;
-
           // Heading from device y-axis (top of phone) — reliable when phone is flat
           const heading_y = Math.atan2(ey, ny);
           // Heading from device -z axis (camera direction) — reliable when phone is upright
           const heading_nz = Math.atan2(-ez, -nz);
 
-          // Circular weighted average (approximately inverse-variance weighting).
-          // When one axis is near-vertical its quality approaches zero, smoothly
-          // reducing its influence without any hard threshold discontinuity.
-          const wy = qy / (qy + qz);
+          // These two estimates point along physically DIFFERENT device axes (+y and -z),
+          // which are 90° apart in azimuth whenever both are horizontal. They must NOT be
+          // averaged as if they agreed: in landscape both axes are horizontal, and a 50/50
+          // blend produces a ~45° error (positive or negative depending on the landscape
+          // direction). Instead select purely on how horizontal the camera axis (-z) is, so
+          // the camera direction is used whenever the phone is upright (portrait OR
+          // landscape) and the top-of-phone axis is used only as the camera axis approaches
+          // vertical (phone lying flat, camera pointing up/down).
+          // wCam = 1 - uz² : 1 when the phone is upright, 0 when it is flat.
+          const wCam = 1 - uz * uz;
           let diff = heading_nz - heading_y;
           if (diff > Math.PI) diff -= 2 * Math.PI;
           if (diff < -Math.PI) diff += 2 * Math.PI;
-          heading = heading_y + (1 - wy) * diff;
+          heading = heading_y + wCam * diff;
         }
       }
     } else {
