@@ -40,29 +40,29 @@ export class MadgwickFilter {
 
     const q = this.q;
 
-    // Normalize accelerometer for gradient computation
+    // Gradient descent - accelerometer objective function.
+    // Skipped when the reading is zero (e.g. freefall): a zero vector
+    // carries no gravity direction, and the normalised gradient would
+    // otherwise become a full-strength step in a meaningless direction.
+    let g0 = 0, g1 = 0, g2 = 0, g3 = 0;
     const accelNorm = Math.sqrt(
       accelX * accelX + accelY * accelY + accelZ * accelZ
     );
-    let anx, any, anz;
     if (accelNorm > 0) {
-      anx = accelX / accelNorm;
-      any = accelY / accelNorm;
-      anz = accelZ / accelNorm;
-    } else {
-      anx = any = anz = 0;
+      const anx = accelX / accelNorm;
+      const any = accelY / accelNorm;
+      const anz = accelZ / accelNorm;
+
+      const f0 = 2 * (q[1] * q[3] - q[0] * q[2]) - anx;
+      const f1 = 2 * (q[0] * q[1] + q[2] * q[3]) - any;
+      const f2 = 2 * (0.5 - q[1] * q[1] - q[2] * q[2]) - anz;
+
+      // Jacobian transposed * f (gradient)
+      g0 = -2 * q[2] * f0 + 2 * q[1] * f1;
+      g1 = 2 * q[3] * f0 + 2 * q[0] * f1 - 4 * q[1] * f2;
+      g2 = -2 * q[0] * f0 + 2 * q[3] * f1 - 4 * q[2] * f2;
+      g3 = 2 * q[1] * f0 + 2 * q[2] * f1;
     }
-
-    // Gradient descent - accelerometer objective function
-    const f0 = 2 * (q[1] * q[3] - q[0] * q[2]) - anx;
-    const f1 = 2 * (q[0] * q[1] + q[2] * q[3]) - any;
-    const f2 = 2 * (0.5 - q[1] * q[1] - q[2] * q[2]) - anz;
-
-    // Jacobian transposed * f (gradient)
-    let g0 = -2 * q[2] * f0 + 2 * q[1] * f1;
-    let g1 = 2 * q[3] * f0 + 2 * q[0] * f1 - 4 * q[1] * f2;
-    let g2 = -2 * q[0] * f0 + 2 * q[3] * f1 - 4 * q[2] * f2;
-    let g3 = 2 * q[1] * f0 + 2 * q[2] * f1;
 
     // Magnetometer gradient (optional)
     if (

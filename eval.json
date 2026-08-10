@@ -1,5 +1,5 @@
 {
-  "version": "2026-03-15",
+  "version": "2026-08-06",
   "datasets": [
     {
       "key": "broad",
@@ -228,10 +228,10 @@
       "disturbed": "Disturbed"
     },
     "byTrialType": {
-      "translation": 4.26,
-      "rotation": 74.14,
-      "combined": 84.81,
-      "disturbed": 68.2
+      "translation": 5.05,
+      "rotation": 76.19,
+      "combined": 87.45,
+      "disturbed": 72.46
     },
     "detailedTypeLabels": {
       "slowTranslation": "Slow Translation",
@@ -243,14 +243,14 @@
     },
     "byDetailedType": {
       "undisturbed": {
-        "slowTranslation": 3.46,
-        "fastTranslation": 10.85
+        "slowTranslation": 3.78,
+        "fastTranslation": 15.83
       },
       "disturbed": {
-        "tappingVibration": 36.21,
-        "stationaryMagnet": 77.46,
-        "attachedMagnet": 70.3,
-        "officeMixed": 49.76
+        "tappingVibration": 38.82,
+        "stationaryMagnet": 90.48,
+        "attachedMagnet": 71.83,
+        "officeMixed": 56.48
       }
     },
     "params": {
