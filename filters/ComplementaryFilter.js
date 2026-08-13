@@ -3,48 +3,11 @@ import {
   quaternionMultiply,
   quaternionFromGyro,
   quaternionToEuler,
-  quaternionSlerp,
+  quaternionRotateVector,
   calculateGravityAppleConvention,
   initQuaternionFromGravity,
   ahrsNaNGuard,
 } from "../utils/quaternion.js";
-
-// Axis-angle approach: finds quaternion q such that
-// calculateGravityAppleConvention(q) ≈ [ax, ay, az].
-// Accepts any nonzero accel magnitude (unlike initQuaternionFromGravity
-// which guards for plausible gravity norms). Used per-frame as SLERP target.
-function quaternionFromAccel(ax, ay, az) {
-  const norm = Math.sqrt(ax * ax + ay * ay + az * az);
-  if (norm === 0) return [1, 0, 0, 0];
-  const dx = ax / norm;
-  const dy = ay / norm;
-  const dz = az / norm;
-
-  // qConj must rotate [0,0,1] to [dx,dy,dz]
-  // Cross product: [0,0,1] × [dx,dy,dz] = [-dy, dx, 0]
-  const vx = -dy;
-  const vy = dx;
-  const vNorm = Math.sqrt(vx * vx + vy * vy);
-  const c = dz; // dot product with [0,0,1]
-
-  let cw, cx, cy;
-  if (vNorm < 1e-6) {
-    if (c > 0) {
-      return [1, 0, 0, 0]; // parallel — identity
-    } else {
-      return [0, -1, 0, 0]; // anti-parallel — 180° around x (conjugated)
-    }
-  } else {
-    const angle = Math.acos(Math.max(-1, Math.min(1, c)));
-    const halfAngle = angle / 2;
-    const s = Math.sin(halfAngle) / vNorm;
-    cw = Math.cos(halfAngle);
-    cx = vx * s;
-    cy = vy * s;
-  }
-  // q = conjugate(qConj) since we need the inverse rotation
-  return quaternionNormalize([cw, -cx, -cy, 0]);
-}
 
 export class ComplementaryFilter {
   constructor(alpha) {
@@ -72,20 +35,48 @@ export class ComplementaryFilter {
     // Gyroscope integration (prediction step)
     if (dt > 0) {
       const qGyro = quaternionFromGyro(gyroX, gyroY, gyroZ, dt);
-      let qPredicted = quaternionMultiply(this.q, qGyro);
-      qPredicted = quaternionNormalize(qPredicted);
+      let q = quaternionNormalize(quaternionMultiply(this.q, qGyro));
 
-      // Accelerometer-derived quaternion (correction step)
+      // Tilt-only accelerometer correction (swing–twist): rotate the
+      // predicted gravity direction toward the measured one by a fraction
+      // (1 - alpha) of the angle between them, about the axis perpendicular
+      // to both. This corrects roll/pitch drift while leaving the twist
+      // about gravity (yaw) untouched — a full-attitude SLERP toward an
+      // accel-derived quaternion would drag yaw toward zero, since gravity
+      // carries no yaw information.
       const accelMag = Math.sqrt(
         accelX * accelX + accelY * accelY + accelZ * accelZ
       );
       if (accelMag > 0) {
-        const qAccel = quaternionFromAccel(accelX, accelY, accelZ);
-        // SLERP: alpha=high -> trust gyro more -> mostly use qPredicted
-        this.q = quaternionSlerp(qAccel, qPredicted, this.alpha);
-      } else {
-        this.q = qPredicted;
+        const anx = accelX / accelMag;
+        const any = accelY / accelMag;
+        const anz = accelZ / accelMag;
+
+        // Predicted gravity direction in the body frame
+        const qConj = [q[0], -q[1], -q[2], -q[3]];
+        const gPred = quaternionRotateVector(qConj, [0, 0, 1]);
+
+        // Rotation axis (gPred × aMeasured) and angle between the two
+        const cx = gPred[1] * anz - gPred[2] * any;
+        const cy = gPred[2] * anx - gPred[0] * anz;
+        const cz = gPred[0] * any - gPred[1] * anx;
+        const cNorm = Math.sqrt(cx * cx + cy * cy + cz * cz);
+        const dot = gPred[0] * anx + gPred[1] * any + gPred[2] * anz;
+
+        // Skip when aligned (nothing to correct) or anti-parallel (no
+        // unique axis; gyro integration will move it off the singularity).
+        if (cNorm > 1e-8) {
+          const angle = Math.atan2(cNorm, dot);
+          const phi = (1 - this.alpha) * angle;
+          const half = phi / 2;
+          // δq applied as q ⊗ δq moves the predicted gravity toward the
+          // measurement: R(δq⁻¹)·gPred, with δq⁻¹ = rot(axis, phi).
+          const s = Math.sin(half) / cNorm;
+          const dq = [Math.cos(half), -cx * s, -cy * s, -cz * s];
+          q = quaternionNormalize(quaternionMultiply(q, dq));
+        }
       }
+      this.q = q;
     }
 
     this.q = quaternionNormalize(this.q);

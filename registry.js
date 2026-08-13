@@ -5,10 +5,10 @@ import { EKFFilter } from "./filters/EKFFilter.js";
 import { AdaptiveStepCounter } from "./steps/AdaptiveStepCounter.js";
 import { WindowedPeakStepCounter } from "./steps/WindowedPeakStepCounter.js";
 import { TiltCompensatedCompass } from "./compass/TiltCompensatedCompass.js";
+import { formatSpeed } from "./utils/format.js";
 import {
-  formatSpeed,
   getStandardise,
-  getUncalibrated,
+  recordsUncalibrated,
   getSensorEnabled,
   getSensorSpeed,
 } from "./utils/defaults.js";
@@ -70,7 +70,7 @@ export const FUSION_CATEGORIES = {
       {
         key: "uncalibrated",
         label: "Uncalibrated Data On",
-        check: (state) => getUncalibrated(state),
+        check: (state) => recordsUncalibrated(state),
         required: "On",
       },
       {
@@ -123,7 +123,13 @@ export const FUSION_CATEGORIES = {
         ].forEach((s) => {
           sensorState[s] = { ...sensorState[s], speed: 10 };
         });
-        return { standardise: true, uncalibrated: true, sensorState };
+        const update = { standardise: true, sensorState };
+        if (!recordsUncalibrated(state)) {
+          // only lift CalibratedOnly to Both; a user on UncalibratedOnly
+          // already satisfies the requirement and keeps their choice
+          update.uncalibrated = "Both";
+        }
+        return update;
       });
     },
 
@@ -320,7 +326,7 @@ export const FUSION_CATEGORIES = {
           driverSensor: "Gyroscope",
           fallbacks: { AccelerometerUncalibrated: "Accelerometer" },
         },
-        createFilter: (params) => new MahonyFilter(params.kP, params.kI, params.kPMag),
+        createFilter: (params) => new MahonyFilter(params.kP, params.kI),
         params: [
           {
             key: "kP",
@@ -345,18 +351,6 @@ export const FUSION_CATEGORIES = {
             step: 0.005,
             decimals: 3,
             defaultValue: 0.01,
-          },
-          {
-            key: "kPMag",
-            stateKey: "KPMag",
-            label: "Magnetometer Gain (kPMag)",
-            description:
-              "Magnetometer correction strength for yaw. Higher values correct heading faster but may add noise. Defaults to kP if not set.",
-            min: 0.0,
-            max: 5.0,
-            step: 0.1,
-            decimals: 1,
-            defaultValue: 0.7,
           },
         ],
       },
@@ -685,6 +679,12 @@ export const FUSION_CATEGORIES = {
 
     requirements: [
       {
+        key: "standardise",
+        label: "Standardisation On",
+        check: (state) => getStandardise(state),
+        required: "On",
+      },
+      {
         key: "compass",
         sensor: "Compass",
         label: "Compass Sensor On",
@@ -717,7 +717,7 @@ export const FUSION_CATEGORIES = {
           enabled: true,
         };
         sensorState["Gravity"] = { ...sensorState["Gravity"], enabled: true };
-        return { sensorState };
+        return { standardise: true, sensorState };
       });
     },
 
@@ -798,7 +798,7 @@ export const FUSION_CATEGORIES = {
             stateKey: "Smoothing",
             label: "Smoothing",
             description:
-              "EMA alpha for heading stability. Higher values produce smoother but slower-responding headings.",
+              "EMA alpha for heading stability. Lower values produce smoother but slower-responding headings; higher values respond faster but are noisier (1.0 disables smoothing).",
             min: 0.01,
             max: 1.0,
             step: 0.01,

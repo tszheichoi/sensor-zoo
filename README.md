@@ -16,7 +16,7 @@ All orientation filters share the same output: quaternion (`qw, qx, qy, qz`), Eu
 
 ### Complementary Filter
 
-A lightweight filter that blends gyroscope integration (prediction) with accelerometer-derived tilt correction via spherical linear interpolation (SLERP). A single `alpha` parameter (0–1) controls the gyro/accel trust balance. Does not support magnetometer input, so yaw is relative to initialisation.
+A lightweight filter that blends gyroscope integration (prediction) with accelerometer-derived tilt correction. A single `alpha` parameter (0–1) controls the gyro/accel trust balance: each update rotates the estimated gravity direction a fraction `(1 - alpha)` of the way toward the measured one, correcting roll and pitch while leaving yaw purely gyro-integrated. Does not support magnetometer input, so yaw is relative to initialisation and drifts with gyro bias.
 
 - `alpha` — gyro/accel trust balance (higher = trust gyro more)
 
@@ -37,7 +37,7 @@ update(accelX, accelY, accelZ, gyroX, gyroY, gyroZ, dt, magX?, magY?, magZ?)
 
 ### Mahony Filter
 
-A PI-controller (proportional-integral) AHRS algorithm that computes the cross-product error between measured and estimated gravity, then feeds it through a PI loop to correct the gyroscope in real time. The integral term continuously estimates and removes gyroscope bias. Optional magnetometer support with the same 10–200 µT outlier bounds; magnetometer error is projected onto the gravity axis to isolate yaw correction and prevent heading errors from destabilising the tilt estimate.
+A PI-controller (proportional-integral) AHRS algorithm that computes the cross-product error between measured and estimated gravity, then feeds it through a PI loop to correct the gyroscope in real time. The integral term continuously estimates and removes gyroscope bias. Optional magnetometer support with the same 10–200 µT outlier bounds; magnetometer error is projected onto the gravity axis to isolate yaw correction and prevent heading errors from destabilising the tilt estimate, and is excluded from the integral term so that magnetic disturbance cannot corrupt the gyroscope bias estimate.
 
 - `kP` — proportional gain (how aggressively the filter corrects toward the accelerometer)
 - `kI` — integral gain (how quickly the filter learns and removes gyroscope bias)
@@ -49,7 +49,7 @@ update(accelX, accelY, accelZ, gyroX, gyroY, gyroZ, dt, magX?, magY?, magZ?)
 
 ### Extended Kalman Filter (EKF)
 
-An error-state EKF with a 6D state (quaternion + gyroscope bias). Predicts via bias-corrected gyro integration, then corrects using accelerometer and (optionally) magnetometer measurements. Features adaptive accelerometer noise scaling during motion, magnetometer outlier rejection (10–200 µT), and Joseph-form covariance updates for numerical stability.
+An error-state EKF with a 6-state vector (3-axis attitude error + 3-axis gyroscope bias). Predicts via bias-corrected gyro integration, then corrects using accelerometer and (optionally) magnetometer measurements. Features adaptive accelerometer noise scaling during motion, magnetometer outlier rejection (10–200 µT), and Joseph-form covariance updates for numerical stability.
 
 - `processNoise` — gyroscope process noise standard deviation
 - `accelNoise` — accelerometer measurement noise standard deviation
@@ -89,9 +89,9 @@ update(accelX, accelY, accelZ, dt); // returns { steps }
 
 ### Tilt-Compensated Compass
 
-Computes magnetic bearing from raw magnetometer data, with optional tilt compensation using a gravity vector (typically from an AHRS filter). Adapts to device orientation: uses raw XY heading when the phone is upright, full tilt compensation when flat, and a smooth blend in between. Applies EMA smoothing with circular wrap-around handling.
+Computes magnetic bearing from raw magnetometer data, with optional tilt compensation using a gravity vector (typically from an AHRS filter). Gravity and the magnetic field define an east/north basis, and the heading is read off whichever device axis is closest to horizontal: the camera direction (−z) when the phone is upright, in portrait *or* landscape, and the top of the phone (+y) as the camera axis approaches vertical (phone lying flat). The two are weighted by `1 - uz²` rather than averaged, since they are 90° apart in azimuth whenever both are horizontal. Falls back to a raw XY heading only when no usable gravity vector is supplied or the magnetic field is nearly parallel to gravity. Applies EMA smoothing with circular wrap-around handling.
 
-- `smoothing` — EMA smoothing coefficient (0–1)
+- `smoothing` — EMA coefficient (0–1). Lower values give smoother but slower-responding headings; `1.0` disables smoothing entirely
 
 ```js
 update(magX, magY, magZ, gravityX?, gravityY?, gravityZ?, dt) // returns { magneticBearing }
@@ -190,7 +190,7 @@ Available filters: `madgwick`, `mahony`, `ekf`, `complementary`, `adaptiveThresh
 ### Output columns
 
 - **Orientation** (`madgwick`, `mahony`, `ekf`, `complementary`): `time, qw, qx, qy, qz, roll, pitch, yaw, gravityX, gravityY, gravityZ, userAccelX, userAccelY, userAccelZ` — Euler angles in radians (aerospace intrinsic ZYX), gravity and user acceleration in m/s²
-- **Step counter** (`adaptiveThreshold`): `time, steps` — cumulative step count
+- **Step counter** (`adaptiveThreshold`, `windowedPeak`): `time, steps` — cumulative step count
 - **Compass** (`tiltCompensated`): `time, magneticBearing` — heading in degrees (0–360)
 
 The script prefers `AccelerometerUncalibrated.csv` over `Accelerometer.csv` when available (uncalibrated data hasn't been filtered by the OS). A summary line with sample count and duration is printed to stderr.
@@ -198,6 +198,8 @@ The script prefers `AccelerometerUncalibrated.csv` over `Accelerometer.csv` when
 ## Evaluation Results
 
 All filters are validated against public research datasets and real device recordings. Summary results are also available in [`eval.json`](./eval.json).
+
+The Complementary filter is not included in the orientation benchmarks: it takes no magnetometer input, so its yaw is relative to initialisation and cannot be scored against the absolute heading in the ground truth.
 
 ### Orientation — BROAD Dataset
 
@@ -217,6 +219,8 @@ Under magnetic disturbances (nearby magnets, office environments):
 | **Mahony**   |       8.0°        |        23.3°         |
 | **EKF**      |       9.2°        |        99.3°         |
 
+The EKF's `magNoise` default of 1.0 was validated against alternatives: raising it to 3.0 improves roll/pitch similarity to the OS gravity sensor by 1–2° on real devices, but costs the EKF ~20° of ground-truth attitude accuracy on BROAD — including on the magnetically disturbed trials — because the weaker magnetometer correction lets yaw drift toward the no-magnetometer regime.
+
 ### Orientation — Real Devices
 
 Gravity vector RMSE (degrees) vs system sensor, measured during 98-minute city walks on 5 devices. First 5 seconds excluded for filter convergence.
@@ -235,10 +239,10 @@ Tilt-compensated compass (smoothing=0.15) heading RMSE, using Madgwick-derived g
 
 | Trial Type                        | Median Heading RMSE |
 | --------------------------------- | :-----------------: |
-| Translation (slow + fast)         |      **4.3°**       |
-| Rotation                          |        74.1°        |
-| Combined (rotation + translation) |        84.8°        |
-| Magnetically disturbed            |        68.2°        |
+| Translation (slow + fast)         |      **5.1°**       |
+| Rotation                          |        76.2°        |
+| Combined (rotation + translation) |        87.5°        |
+| Magnetically disturbed            |        72.5°        |
 
 Compass heading is most accurate during translation-only motion. Pure rotation and magnetic disturbances cause large heading errors, which is expected — the compass does not track gyroscope-integrated yaw.
 

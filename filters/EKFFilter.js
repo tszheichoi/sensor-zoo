@@ -9,6 +9,7 @@ import {
   ahrsNaNGuard,
 } from "../utils/quaternion.js";
 
+// ── Matrix helpers (flat Float64Array, row-major) ──────────────────────
 
 // 6x6 * 6x6 → 6x6
 function mat6x6Multiply(A, B) {
@@ -122,11 +123,11 @@ function mat3x3Inverse(M) {
   return inv;
 }
 
-
+// ── Constants ──────────────────────────────────────────────────────────
 // Gyro bias random walk noise — controls how fast bias estimates drift.
 const BIAS_PROCESS_NOISE = 1e-5;
-// If normalised accel magnitude deviates from 1g, inflate measurement
-// noise to reduce accel correction during motion.
+// If normalised accel magnitude deviates more than 15% from 1g,
+// inflate measurement noise to reduce accel correction during motion.
 const ACCEL_ADAPTIVE_THRESHOLD = 0.15;
 // Magnetometer magnitude bounds for outlier rejection (µT).
 // Android calibrated magnetometers can report 100–150 µT; we
@@ -134,6 +135,7 @@ const ACCEL_ADAPTIVE_THRESHOLD = 0.15;
 const MAG_MIN_NORM = 10;
 const MAG_MAX_NORM = 200;
 
+// ── EKF Filter ─────────────────────────────────────────────────────────
 
 export class EKFFilter {
   constructor(processNoise, accelNoise, magNoise) {
@@ -182,6 +184,7 @@ export class EKFFilter {
       this.init(accelX, accelY, accelZ);
     }
 
+    // ─── Predict ───────────────────────────────────────────────────────
 
     // 1. Subtract bias
     const wx = gyroX - this.bias[0];
@@ -219,6 +222,7 @@ export class EKFFilter {
     this.P = mat6x6MultiplyTranspose(FP, F);
     mat6x6Add(this.P, Q);
 
+    // ─── Accelerometer Update ──────────────────────────────────────────
 
     const accelNorm = Math.sqrt(
       accelX * accelX + accelY * accelY + accelZ * accelZ
@@ -254,6 +258,7 @@ export class EKFFilter {
       this._kalmanUpdate(H, R, yAccel);
     }
 
+    // ─── Magnetometer Update ───────────────────────────────────────────
 
     if (
       magX != null && magY != null && magZ != null &&
@@ -294,6 +299,7 @@ export class EKFFilter {
       }
     }
 
+    // ─── Output ────────────────────────────────────────────────────────
 
     const gravity = calculateGravityAppleConvention(this.q);
     const euler = quaternionToEuler(this.q);
