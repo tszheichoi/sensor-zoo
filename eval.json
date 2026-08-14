@@ -67,7 +67,7 @@
       "key": "tyrex",
       "name": "Tyrex Smartphone Attitude Benchmark",
       "source": "external",
-      "description": "126 trials from 3 subjects carrying 3 smartphones (LG Nexus 5, iPhone 5, iPhone 4S) through eight realistic carriage modes, with Qualisys optical motion capture ground truth. Six of the motions are repeated with a deliberate magnetic perturbation. The handsets date from 2011-2013, so sensor quality is below a modern phone, but this is the only public corpus combining real smartphones, mocap ground truth, magnetometer data and controlled magnetic disturbance.",
+      "description": "126 trials from 3 subjects carrying 3 smartphones (LG Nexus 5, iPhone 5, iPhone 4S) through eight realistic carriage modes, with Qualisys optical motion capture ground truth. Six of the eight motions are repeated with a deliberate magnetic perturbation (54 of the 126 trials). The handsets date from 2011-2013, so sensor quality is below a modern phone, but this is the only public corpus combining real smartphones, mocap ground truth, magnetometer data and controlled magnetic disturbance.",
       "url": "https://github.com/tyrex-team/benchmarks-attitude-smartphones",
       "citation": "T. Michel, P. Genevès, H. Fourati, N. Layaïda. On attitude estimation with smartphones. IEEE PerCom 2017, pp. 267–275; extended as: Attitude estimation for indoor navigation and augmented reality with smartphones. Pervasive and Mobile Computing, 46:96–121, 2018.",
       "license": "CeCILL v2.1",
@@ -93,13 +93,13 @@
     "description": "Attitude error (degrees) against a reference, median across trials",
     "notes": [
       "Default tuning parameters are used for all filters; per-trial tuning would yield lower errors",
-      "The Complementary filter is excluded from the absolute-orientation benchmarks because it takes no magnetometer input, so its yaw is relative to initialisation and cannot be scored against an absolute heading without removing a per-trial offset",
-      "Before scoring, a constant heading offset (one rotation about gravity) is removed per trial, fitted over all scored samples, as is standard in the attitude benchmark literature: heading is unobservable without a magnetometer and ambiguous with one, while tilt stays absolute so constant tilt bias is measured, not forgiven. singleSampleAlignment shows the same trials with the offset read off a single sample, as earlier versions did"
+      "The Complementary filter takes no magnetometer input, so its yaw is relative to initialisation and cannot be scored against absolute orientation; it is benchmarked in the pedestrian dead reckoning results instead",
+      "Before scoring, a constant heading offset (one rotation about gravity) is removed per trial, fitted over all scored samples, as is standard in the attitude benchmark literature: heading is unobservable without a magnetometer and ambiguous with one, while tilt stays absolute so constant tilt bias is measured, not forgiven."
     ],
     "broad": {
       "methodology": "Each filter processes 39 BROAD trials offline. Orientation output is compared to optical motion capture ground truth using angular RMSE, computed only during movement phases, and the median across trials is reported.",
       "notes": [
-        "BROAD is recorded at 286 Hz and downsampled to 100 Hz to match the smartphone rate the filters are tuned for; IMU channels are low-pass filtered (zero-phase Butterworth, 45 Hz) before resampling so disturbance-trial content above the output Nyquist is removed rather than aliased into band",
+        "Downsampling to 100 Hz matches the smartphone rate the filters are tuned for; low-pass filtering before resampling prevents aliasing",
         "Ground truth is excellent but the IMU is a research-grade unit rather than a phone; see the Tyrex results for real handsets"
       ],
       "metric": "Median across trials of movement-phase angular RMSE, in degrees. MAE over the same samples is reported under mae.",
@@ -182,7 +182,7 @@
         }
       },
       "singleSampleAlignment": {
-        "description": "The same trials scored with the frame offset taken from a single sample rather than fitted over the scoring window. Published so the effect of the alignment estimator is auditable.",
+        "description": "The same trials scored with the frame offset taken from a single sample instead of fitted over the scoring window, showing how much the alignment choice affects the numbers.",
         "undisturbed": {
           "madgwick": {
             "mag": 4.46,
@@ -217,7 +217,6 @@
       "metric": "Roll and pitch RMSE in degrees against the operating system's own gravity vector. Not comparable with the BROAD and Tyrex results: two components rather than full attitude, and the reference is not ground truth.",
       "methodology": "Each filter processes a 98-minute city walk recorded by the app and its gravity vector is compared with the gravity vector the operating system reported on the same device. The first 5 seconds are excluded for filter convergence.",
       "notes": [
-        "The system sensor is a black-box reference, not ground truth, so this measures agreement rather than accuracy",
         "No optical reference exists for these recordings; they test behaviour on current hardware, which BROAD and Tyrex cannot"
       ],
       "description": "Gravity vector RMSE (degrees) vs system sensor during 98-min city walks",
@@ -323,13 +322,8 @@
       "dataset": "Tyrex (126 trials, 3 subjects x 3 phones x 8 motions, Qualisys mocap)",
       "url": "https://github.com/tyrex-team/benchmarks-attitude-smartphones",
       "notes": [
-        "Real smartphones against optical motion capture, so this complements BROAD rather than repeating it",
-        "The filters need about 60 s to pull yaw to magnetic north from a cold start, because attitude is initialised from gravity alone and yaw begins at zero; BROAD hides this because its trials open with a rest period. Trials run about 120 s, so roughly half of each trial is excluded",
-        "Handsets are 2011-2013 models, so absolute numbers are pessimistic relative to a modern phone",
-        "Six of the eight motions are repeated under deliberate magnetic perturbation",
-        "The 60 s exclusion makes these numbers non-comparable with values published in the Tyrex papers, which do not exclude a convergence period. The 60 s figure was itself chosen by measuring convergence on this corpus, since no other public phone corpus with mocap exists to measure it on",
-        "Unlike BROAD, which scores movement phases only, this scores every sample after 60 s including still periods, which pulls error down; cross-corpus comparisons should bear both this and the handset age in mind",
-        "The without-magnetometer column is NOT comparable with BROAD's. Nomag error is dominated by yaw drift, which grows with time (the fitted offset removes only the constant part), and Tyrex scores about 60 s per trial against BROAD's 194 s median, so drift has far less time to accumulate. Compare the mag columns across corpora"
+        "The first 60 s of each roughly 120 s trial are excluded: attitude initialises from gravity alone, so yaw starts at zero and takes about a minute (measured on this corpus) to pull to magnetic north. Tyrex-paper numbers exclude no convergence period, so they are not comparable with these",
+        "Comparisons with BROAD need care: this scores every sample after 60 s including still periods where BROAD scores movement only, and the shorter window (60 s vs BROAD's 194 s median) gives nomag yaw drift less time to accumulate, so the without-magnetometer columns are not comparable. Compare the mag columns"
       ],
       "metric": "Median across trials of per-trial angular RMSE, in degrees. MAE over the same samples is reported under mae.",
       "trials": 126,
@@ -426,7 +420,7 @@
         }
       },
       "singleSampleAlignment": {
-        "description": "The same trials scored with the frame offset taken from a single sample rather than fitted over the scoring window.",
+        "description": "The same trials scored with the frame offset taken from a single sample instead of fitted over the scoring window, showing how much the alignment choice affects the numbers.",
         "undisturbed": {
           "madgwick": {
             "mag": 19.2,
@@ -479,8 +473,7 @@
     "metric": "Median heading RMSE in degrees",
     "methodology": "The tilt-compensated compass uses Madgwick-derived gravity to project the magnetometer onto the horizontal plane. Heading output is compared to optical motion capture ground truth across 39 BROAD trials, after removing a constant per-trial heading offset fitted as the circular mean over the scored movement samples.",
     "notes": [
-      "Compass accuracy degrades significantly during rotations and combined motions",
-      "Heading is only meaningful when the device is relatively still; large errors during rotation are expected",
+      "Accuracy is good while the device translates without rotating, and degrades sharply during rotation and combined motion: the compass does not track gyro-integrated yaw, so errors while turning are expected",
       "Magnetic disturbances (nearby magnets, office environments) can cause persistent heading offsets"
     ],
     "dataset": "BROAD (39 trials, tilt-compensated compass with Madgwick-derived gravity)",
@@ -529,10 +522,9 @@
       "Pure step-and-heading dead reckoning with a constant stride; competition entries additionally fuse WiFi and floor plans, so these numbers benchmark the filters, not a localization system",
       "The Complementary filter is included here because a per-trial heading offset is calibrated anyway, unlike the absolute-orientation benchmarks",
       "The step counter and the Android step detector disagree systematically; which is closer to truth is unresolved on this corpus",
-      "The 2025 edition samples at ~50 Hz, below the 100 Hz the filters and step counter are tuned for; the 2022 edition is 100 Hz",
+      "The ~50 Hz of the 2025 edition is below the 100 Hz the filters and step counter are tuned for",
       "Ground truth is sparse surveyed landmarks tens of seconds apart, so error between landmarks is unobserved",
-      "The 2022 corpus has no Android step detector events at all, so its step ratio is null rather than a number; the 2025 ratio is computed over all 72 trials",
-      "2022 scores 85 of 89 trials: four User05 trials carry no magnetometer or AHRS stream; all 72 of the 2025 trials are scored"
+      "The 2022 corpus has no Android step detector events at all, so its step ratio is null"
     ],
     "dataset": "IPIN 2025 Track 3 Training Trials (72 trials, ~50 Hz, surveyed landmarks)",
     "url": "https://competition.ipin-conference.org",
@@ -616,7 +608,7 @@
       "url": "https://cecas.clemson.edu/~ahoover/pedometer/",
       "notes": [
         "Clemson is 15 Hz, much lower than the 100 Hz the step counters are designed for",
-        "Hip placement gives the clearest signal; wrist and ankle placements are noisier due to arm swing and foot strike",
+        "No single placement is best everywhere: the adaptive counter is most accurate at the hip for regular walking, the windowed-peak counter at the ankle in every gait, and the wrist is the noisiest placement for regular walking due to arm swing",
         "Irregular gait (e.g. texting while walking) is challenging for all step counters",
         "Windowed peak detection shows large improvements at the ankle across all gait types"
       ],
@@ -694,12 +686,9 @@
       "dataset": "OxWalk (39 participants, ~1 h free-living each, 100 Hz and 25 Hz)",
       "url": "https://ora.ox.ac.uk/objects/uuid:19d3cb34-e2b3-4177-91b6-1bad0e0163e7",
       "notes": [
-        "Free-living rather than scripted walking, so non-walking arm and body movement is present throughout",
-        "Hip placement at 100 Hz is the closest analogue to a phone carried in a pocket",
         "Wrist error is dominated by false positives, not missed steps: neither counter gates on whether the wearer is walking",
         "Wrist results are much worse at 100 Hz than at 25 Hz on the same recordings. The counters smooth by a fixed amount per sample, not per second, so at 100 Hz they smooth four times less in real time and rapid wrist jitter gets counted as steps. The counters are exactly as shipped in the app; a rate-aware smoother would remove the asymmetry",
-        "Sensor Logger runs step counting on the phone's accelerometer only, never on watch or wrist data. A phone rides in a pocket or bag, so the hip results at 100 Hz are the ones that reflect real app use. The wrist results are included for anyone applying these counters to wrist-worn devices, which they were not designed for",
-        "Ground truth is a per-sample heel-strike annotation from foot-facing video, already time-aligned"
+        "Sensor Logger runs step counting on the phone's accelerometer only, never on watch or wrist data. A phone rides in a pocket or bag, so the hip results at 100 Hz are the ones that reflect real app use. The wrist results are included for anyone applying these counters to wrist-worn devices, which they were not designed for"
       ],
       "adaptiveThreshold": {
         "byPlacementAndRate": {
