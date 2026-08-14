@@ -199,9 +199,7 @@ The script prefers `AccelerometerUncalibrated.csv` over `Accelerometer.csv` when
 
 All algorithms are benchmarked against public research datasets (BROAD, Tyrex, Clemson, OxWalk, IPIN indoor localization competitions) and real device recordings, covering orientation accuracy against optical motion capture, magnetic disturbance robustness, step counting, compass heading, and end-to-end pedestrian dead reckoning.
 
-- **Explore the results interactively at [sensorlogger.app/zoo](https://sensorlogger.app/zoo)**
-- Machine-readable results with full methodology notes: [`eval.json`](./eval.json)
-- Benchmark harness, dataset download scripts, and everything needed to reproduce: [sensor-zoo-eval](https://github.com/tszheichoi/sensor-zoo-eval)
+**Explore the results interactively at [sensorlogger.app/zoo](https://sensorlogger.app/zoo)**
 
 ## Citation
 
