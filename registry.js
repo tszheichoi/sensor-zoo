@@ -2,6 +2,7 @@ import { ComplementaryFilter } from "./filters/ComplementaryFilter.js";
 import { MadgwickFilter } from "./filters/MadgwickFilter.js";
 import { MahonyFilter } from "./filters/MahonyFilter.js";
 import { EKFFilter } from "./filters/EKFFilter.js";
+import { VQFFilter } from "./filters/VQFFilter.js";
 import { AdaptiveStepCounter } from "./steps/AdaptiveStepCounter.js";
 import { WindowedPeakStepCounter } from "./steps/WindowedPeakStepCounter.js";
 import { TiltCompensatedCompass } from "./compass/TiltCompensatedCompass.js";
@@ -427,6 +428,65 @@ export const FUSION_CATEGORIES = {
             step: 0.1,
             decimals: 1,
             defaultValue: 1.0,
+          },
+        ],
+      },
+      vqf: {
+        label: "VQF",
+        description:
+          "Versatile quaternion filter with gyro bias estimation and magnetic disturbance rejection (Laidig and Seel 2023).",
+        inputs: {
+          required: [
+            {
+              sensor: "AccelerometerUncalibrated",
+              role: "accelerometer",
+              title: "Total Acceleration",
+              detail:
+                "Raw accelerometer including gravity, without iOS bias correction.",
+            },
+            {
+              sensor: "Gyroscope",
+              role: "gyroscope",
+              title: "Rotation Rate",
+              detail: "Device angular velocity in radians per second.",
+            },
+          ],
+          optional: [
+            {
+              sensor: "Magnetometer",
+              role: "magnetometer",
+              title: "Magnetic Field",
+              detail: "Ambient magnetic field strength in microteslas.",
+            },
+          ],
+          driverSensor: "Gyroscope",
+          fallbacks: { AccelerometerUncalibrated: "Accelerometer" },
+        },
+        createFilter: (params) => new VQFFilter(params.tauAcc, params.tauMag),
+        params: [
+          {
+            key: "tauAcc",
+            stateKey: "TauAcc",
+            label: "Accelerometer Time Constant",
+            description:
+              "Time constant in seconds for accelerometer-based inclination correction. Higher values are smoother but slower to correct gyro drift.",
+            min: 0.5,
+            max: 10.0,
+            step: 0.5,
+            decimals: 1,
+            defaultValue: 3.0,
+          },
+          {
+            key: "tauMag",
+            stateKey: "TauMag",
+            label: "Magnetometer Time Constant",
+            description:
+              "Time constant in seconds for magnetometer-based heading correction. Higher values are smoother but slower to correct heading drift.",
+            min: 1.0,
+            max: 30.0,
+            step: 1.0,
+            decimals: 0,
+            defaultValue: 9.0,
           },
         ],
       },

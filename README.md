@@ -49,11 +49,24 @@ update(accelX, accelY, accelZ, gyroX, gyroY, gyroZ, dt, magX?, magY?, magZ?)
 
 ### Extended Kalman Filter (EKF)
 
-An error-state EKF with a 6-state vector (3-axis attitude error + 3-axis gyroscope bias). Predicts via bias-corrected gyro integration, then corrects using accelerometer and (optionally) magnetometer measurements. Features adaptive accelerometer noise scaling during motion, magnetometer outlier rejection (10–200 µT), and Joseph-form covariance updates for numerical stability.
+An error-state EKF with a 6-state vector (3-axis attitude error + 3-axis gyroscope bias). Predicts via bias-corrected gyro integration, then corrects using accelerometer and (optionally) magnetometer measurements. Features adaptive accelerometer noise scaling during motion, magnetometer outlier rejection (10–200 µT), and Joseph-form covariance updates for numerical stability. Accelerometer updates are projected off the gravity axis, since yaw and the matching bias component are unobservable from gravity alone; without this, covariance cross terms slowly feed accelerometer noise into yaw. When no usable magnetometer sample is present (absent or outside the outlier bounds), accelerometer noise is additionally inflated with angular rate, because in 6-axis operation tilt corrections during rotation compose into yaw drift that nothing can repair.
 
 - `processNoise`: gyroscope process noise standard deviation
 - `accelNoise`: accelerometer measurement noise standard deviation
 - `magNoise`: magnetometer measurement noise standard deviation
+
+```js
+update(accelX, accelY, accelZ, gyroX, gyroY, gyroZ, dt, magX?, magY?, magZ?)
+```
+
+### VQF
+
+A JavaScript port of VQF (Laidig and Seel, Information Fusion 2023), MIT licensed like the [reference implementation](https://github.com/dlaidig/vqf). Runs magnetometer-free and magnetometer-aided estimation simultaneously: gyroscope strapdown integration, low-pass filtered inclination correction in the inertial frame, a magnetometer-driven heading offset, gyroscope bias estimation during rest and motion, and magnetic disturbance detection and rejection. The port is numerically cross-validated against the reference to within microdegrees. Returns the 9D estimate when magnetometer data is supplied and the 6D estimate otherwise.
+
+- `tauAcc`: time constant in seconds for inclination correction (higher = smoother, slower drift correction)
+- `tauMag`: time constant in seconds for heading correction (higher = smoother, slower heading correction)
+
+All other reference parameters can be overridden via an optional third constructor argument, e.g. `new VQFFilter(3, 9, { magDistRejectionEnabled: false })`.
 
 ```js
 update(accelX, accelY, accelZ, gyroX, gyroY, gyroZ, dt, magX?, magY?, magZ?)
@@ -185,7 +198,7 @@ node run.js my-recording/ --filter adaptiveThreshold         # step counting
 node run.js my-recording/ --filter tiltCompensated           # compass bearing
 ```
 
-Available filters: `madgwick`, `mahony`, `ekf`, `complementary`, `adaptiveThreshold`, `windowedPeak`, `tiltCompensated`.
+Available filters: `madgwick`, `mahony`, `ekf`, `vqf`, `complementary`, `adaptiveThreshold`, `windowedPeak`, `tiltCompensated`.
 
 ### Output columns
 
