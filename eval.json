@@ -1,5 +1,5 @@
 {
-  "version": "2026-08-06",
+  "version": "2026-08-10",
   "datasets": [
     {
       "key": "broad",
@@ -35,67 +35,186 @@
       "categories": [
         "orientation"
       ]
+    },
+    {
+      "key": "ipin",
+      "name": "IPIN 2025 Competition Track 3 (Smartphone)",
+      "source": "external",
+      "description": "72 smartphone trials (~280 s each, Samsung S24 Ultra and A52, ~50 Hz IMU) recorded in university buildings in Tampere for the IPIN indoor localization competition. Each trial carries surveyed position landmarks, the phone's own AHRS stream, and Android step detector events. There is no orientation ground truth — position landmarks only.",
+      "url": "https://competition.ipin-conference.org",
+      "citation": "F. Potortì et al. Offsite evaluation of localization systems: criteria, systems and results from IPIN 2021-22 competitions.",
+      "categories": [
+        "pdr"
+      ]
+    },
+    {
+      "key": "ipin2022",
+      "name": "IPIN 2022 Competition Track 3 (Smartphone)",
+      "source": "external",
+      "description": "89 smartphone trials from the 2022 edition of the same competition, recorded at 100 Hz rather than the ~50 Hz of 2025. Included so the effect of sample rate on the same pipeline is visible directly. 85 of the 89 are scored: four trials (all User05) carry no magnetometer or AHRS records, so the mag-aided filters cannot run and there is no phone AHRS reference to compare against.",
+      "url": "https://doi.org/10.5281/zenodo.7612915",
+      "license": "CC-BY-4.0",
+      "categories": [
+        "pdr"
+      ]
+    },
+    {
+      "key": "tyrex",
+      "name": "Tyrex Smartphone Attitude Benchmark",
+      "source": "external",
+      "description": "126 trials from 3 subjects carrying 3 smartphones (LG Nexus 5, iPhone 5, iPhone 4S) through eight realistic carriage modes, with Qualisys optical motion capture ground truth. Six of the motions are repeated with a deliberate magnetic perturbation. The handsets date from 2011-2013, so sensor quality is below a modern phone, but this is the only public corpus combining real smartphones, mocap ground truth, magnetometer data and controlled magnetic disturbance.",
+      "url": "https://github.com/tyrex-team/benchmarks-attitude-smartphones",
+      "citation": "T. Michel, P. Genevès, H. Fourati, N. Layaïda. On attitude estimation with smartphones. IEEE PerCom 2017; extended in Pervasive and Mobile Computing 46, 2018.",
+      "license": "CeCILL v2.1",
+      "categories": [
+        "orientation"
+      ]
+    },
+    {
+      "key": "oxwalk",
+      "name": "OxWalk Free-Living Step Dataset",
+      "source": "external",
+      "description": "39 participants wearing wrist and hip accelerometers during roughly an hour of unscripted free-living activity each, recorded at both 100 Hz and 25 Hz. Ground truth is a per-sample heel-strike annotation derived from foot-facing video. Unlike scripted corpora it contains long stretches of non-walking movement, so it measures false positives as well as missed steps.",
+      "url": "https://ora.ox.ac.uk/objects/uuid:19d3cb34-e2b3-4177-91b6-1bad0e0163e7",
+      "doi": "https://doi.org/10.5287/bodleian:ORQ2abnbR",
+      "citation": "Small SR, von Fritsch L, Doherty A, Khalid S, Price A. OxWalk: Wrist and hip-based activity tracker dataset for free-living step detection and gait recognition. University of Oxford, 2022.",
+      "license": "CC-BY-4.0",
+      "categories": [
+        "steps"
+      ]
     }
   ],
   "orientation": {
-    "description": "Angular RMSE (degrees) during movement phases, median across trials",
-    "metric": "Median angular RMSE in degrees",
-    "methodology": "Each filter processes 39 BROAD trials offline. Orientation output is compared to optical motion capture ground truth using angular RMSE, computed only during movement phases. The median across all trials is reported.",
+    "description": "Attitude error (degrees) against a reference, median across trials",
     "notes": [
-      "BROAD data is recorded at 286 Hz and downsampled to 100 Hz to match the smartphone rate filters are tuned for",
-      "Default tuning parameters are used for all filters — per-trial tuning would yield lower errors",
-      "The Complementary filter is excluded from BROAD benchmarks because it does not support magnetometer input"
+      "Default tuning parameters are used for all filters; per-trial tuning would yield lower errors",
+      "The Complementary filter is excluded from the absolute-orientation benchmarks because it takes no magnetometer input, so its yaw is relative to initialisation and cannot be scored against an absolute heading without removing a per-trial offset",
+      "Before scoring, a constant HEADING offset (one rotation about gravity) is removed per trial, fitted over all scored samples. This matches the convention of the attitude benchmark literature: heading is unobservable without a magnetometer and ambiguous with one, while tilt stays absolute so a filter's constant tilt bias is measured rather than forgiven. Each sub-block also reports singleSampleAlignment, the same trials with the offset read off a single sample (full pose) as earlier versions did, so the effect of the estimator is auditable"
     ],
     "broad": {
+      "methodology": "Each filter processes 39 BROAD trials offline. Orientation output is compared to optical motion capture ground truth using angular RMSE, computed only during movement phases, and the median across trials is reported.",
+      "notes": [
+        "BROAD is recorded at 286 Hz and downsampled to 100 Hz to match the smartphone rate the filters are tuned for; IMU channels are low-pass filtered (zero-phase Butterworth, 45 Hz) before resampling so disturbance-trial content above the output Nyquist is removed rather than aliased into band",
+        "Ground truth is excellent but the IMU is a research-grade unit rather than a phone; see the tyrex sub-block for real handsets"
+      ],
+      "metric": "Median across trials of movement-phase angular RMSE, in degrees. MAE over the same samples is reported under mae.",
       "dataset": "BROAD (39 trials, 286 Hz downsampled to 100 Hz, optical motion capture ground truth)",
       "url": "https://github.com/dlaidig/broad",
+      "mae": {
+        "description": "Mean absolute error over the same samples, for readers who prefer MAE. RMSE is the primary statistic.",
+        "undisturbed": {
+          "madgwick": {
+            "mag": 2.14,
+            "nomag": 8.27
+          },
+          "mahony": {
+            "mag": 2.84,
+            "nomag": 9.94
+          },
+          "ekf": {
+            "mag": 2.0,
+            "nomag": 47.55
+          }
+        },
+        "disturbed": {
+          "madgwick": {
+            "mag": 3.22,
+            "nomag": 5.43
+          },
+          "mahony": {
+            "mag": 4.98,
+            "nomag": 12.16
+          },
+          "ekf": {
+            "mag": 4.05,
+            "nomag": 67.49
+          }
+        }
+      },
       "rollPitchRmse": {
         "description": "Median roll/pitch RMSE (degrees) from gravity vectors, undisturbed non-combined trials with magnetometer",
         "madgwick": {
-          "roll": 2.27,
-          "pitch": 1.6
+          "roll": 2.12,
+          "pitch": 1.29
         },
         "mahony": {
-          "roll": 7.47,
-          "pitch": 2.49
+          "roll": 4.64,
+          "pitch": 1.52
         },
         "ekf": {
-          "roll": 3.55,
-          "pitch": 1.29
+          "roll": 2.17,
+          "pitch": 1.01
         }
       },
       "undisturbed": {
         "description": "23 trials without magnetic or acceleration disturbances",
         "madgwick": {
-          "mag": 4.4,
-          "nomag": 16.93
+          "mag": 2.37,
+          "nomag": 9.16
         },
         "mahony": {
-          "mag": 12.22,
-          "nomag": 22.38
+          "mag": 3.49,
+          "nomag": 11.41
         },
         "ekf": {
-          "mag": 3.93,
-          "nomag": 82.5
+          "mag": 2.23,
+          "nomag": 58.09
         }
       },
       "disturbed": {
         "description": "16 trials with tapping, vibration, nearby magnets, or office interference",
         "madgwick": {
-          "mag": 6.33,
-          "nomag": 10.8
+          "mag": 3.58,
+          "nomag": 5.94
         },
         "mahony": {
-          "mag": 7.97,
-          "nomag": 23.34
+          "mag": 5.41,
+          "nomag": 13.8
         },
         "ekf": {
-          "mag": 9.25,
-          "nomag": 99.3
+          "mag": 4.66,
+          "nomag": 81.12
+        }
+      },
+      "singleSampleAlignment": {
+        "description": "The same trials scored with the frame offset taken from a single sample rather than fitted over the scoring window. Published so the effect of the alignment estimator is auditable.",
+        "undisturbed": {
+          "madgwick": {
+            "mag": 4.46,
+            "nomag": 16.93
+          },
+          "mahony": {
+            "mag": 12.21,
+            "nomag": 22.32
+          },
+          "ekf": {
+            "mag": 3.91,
+            "nomag": 82.65
+          }
+        },
+        "disturbed": {
+          "madgwick": {
+            "mag": 6.39,
+            "nomag": 10.78
+          },
+          "mahony": {
+            "mag": 7.97,
+            "nomag": 23.44
+          },
+          "ekf": {
+            "mag": 9.24,
+            "nomag": 100.39
+          }
         }
       }
     },
     "devices": {
+      "metric": "Roll and pitch RMSE in degrees against the operating system's own gravity vector. Not comparable with the broad and tyrex sub-blocks: two components rather than full attitude, and the reference is not ground truth.",
+      "methodology": "Each filter processes a 98-minute city walk recorded by the app and its gravity vector is compared with the gravity vector the operating system reported on the same device. The first 5 seconds are excluded for filter convergence.",
+      "notes": [
+        "The system sensor is a black-box reference, not ground truth, so this measures agreement rather than accuracy",
+        "No optical reference exists for these recordings; they test behaviour on current hardware, which BROAD and Tyrex cannot"
+      ],
       "description": "Gravity vector RMSE (degrees) vs system sensor during 98-min city walks",
       "results": [
         {
@@ -194,6 +313,145 @@
         }
       }
     },
+    "tyrex": {
+      "methodology": "Each filter processes a trial at 100 Hz. The first 60 s are excluded as a yaw convergence period. Error is the per-trial angular RMSE of the quaternion angle difference after the fitted heading alignment; the median across trials is given, with MAE over the same samples under mae.",
+      "dataset": "Tyrex (126 trials, 3 subjects x 3 phones x 8 motions, Qualisys mocap)",
+      "url": "https://github.com/tyrex-team/benchmarks-attitude-smartphones",
+      "notes": [
+        "Real smartphones against optical motion capture, so this complements BROAD rather than repeating it",
+        "The filters need about 60 s to pull yaw to magnetic north from a cold start, because attitude is initialised from gravity alone and yaw begins at zero; BROAD hides this because its trials open with a rest period. Trials run about 120 s, so roughly half of each trial is excluded",
+        "Handsets are 2011-2013 models, so absolute numbers are pessimistic relative to a modern phone",
+        "Six of the eight motions are repeated under deliberate magnetic perturbation",
+        "The 60 s exclusion makes these numbers non-comparable with values published in the Tyrex papers, which do not exclude a convergence period. The 60 s figure was itself chosen by measuring convergence on this corpus, since no other public phone corpus with mocap exists to measure it on",
+        "Unlike the broad sub-block, which scores movement phases only, this scores every sample after 60 s including still periods, which pulls error down; cross-corpus comparisons should bear both this and the handset age in mind",
+        "The nomag column is NOT comparable with the nomag column of the broad sub-block. Without a magnetometer the error is dominated by yaw drift, which grows with time, and the fitted frame offset absorbs only the constant part. Tyrex scores about 60 s per trial against 194 s median for BROAD, so nomag error has far less time to accumulate here. The mag columns are the ones to compare across the two corpora"
+      ],
+      "metric": "Median across trials of per-trial angular RMSE, in degrees. MAE over the same samples is reported under mae.",
+      "trials": 126,
+      "undisturbed": {
+        "madgwick": {
+          "mag": 13.77,
+          "nomag": 9.82
+        },
+        "mahony": {
+          "mag": 6.83,
+          "nomag": 10.47
+        },
+        "ekf": {
+          "mag": 4.9,
+          "nomag": 42.22
+        }
+      },
+      "disturbed": {
+        "madgwick": {
+          "mag": 14.51,
+          "nomag": 10.81
+        },
+        "mahony": {
+          "mag": 13.86,
+          "nomag": 8.09
+        },
+        "ekf": {
+          "mag": 11.65,
+          "nomag": 33.71
+        }
+      },
+      "mae": {
+        "description": "Mean absolute error over the same samples, for readers who prefer MAE. RMSE is the primary statistic.",
+        "undisturbed": {
+          "madgwick": {
+            "mag": 13.0,
+            "nomag": 9.27
+          },
+          "mahony": {
+            "mag": 5.88,
+            "nomag": 9.68
+          },
+          "ekf": {
+            "mag": 4.57,
+            "nomag": 35.01
+          }
+        },
+        "disturbed": {
+          "madgwick": {
+            "mag": 12.8,
+            "nomag": 9.31
+          },
+          "mahony": {
+            "mag": 11.66,
+            "nomag": 7.13
+          },
+          "ekf": {
+            "mag": 8.67,
+            "nomag": 29.34
+          }
+        }
+      },
+      "byMotionUndisturbed": {
+        "description": "Angular RMSE by carriage mode, magnetometer enabled, undisturbed trials only",
+        "madgwick": {
+          "ar": 6.55,
+          "backpocket": 8.71,
+          "frontpocket": 21.32,
+          "phoning": 5.62,
+          "runninghand": 23.7,
+          "runningpocket": 15.61,
+          "swinging": 17.02,
+          "texting": 8.45
+        },
+        "mahony": {
+          "ar": 4.54,
+          "backpocket": 5.31,
+          "frontpocket": 5.34,
+          "phoning": 4.62,
+          "runninghand": 10.77,
+          "runningpocket": 8.58,
+          "swinging": 10.21,
+          "texting": 3.52
+        },
+        "ekf": {
+          "ar": 3.43,
+          "backpocket": 4.77,
+          "frontpocket": 3.6,
+          "phoning": 2.82,
+          "runninghand": 31.03,
+          "runningpocket": 9.54,
+          "swinging": 8.52,
+          "texting": 3.58
+        }
+      },
+      "singleSampleAlignment": {
+        "description": "The same trials scored with the frame offset taken from a single sample rather than fitted over the scoring window.",
+        "undisturbed": {
+          "madgwick": {
+            "mag": 19.2,
+            "nomag": 16.47
+          },
+          "mahony": {
+            "mag": 9.63,
+            "nomag": 20.28
+          },
+          "ekf": {
+            "mag": 7.63,
+            "nomag": 85.99
+          }
+        },
+        "disturbed": {
+          "madgwick": {
+            "mag": 20.6,
+            "nomag": 20.61
+          },
+          "mahony": {
+            "mag": 20.48,
+            "nomag": 13.96
+          },
+          "ekf": {
+            "mag": 17.56,
+            "nomag": 66.28
+          }
+        }
+      }
+    },
     "params": {
       "madgwick": {
         "beta": 0.05,
@@ -214,7 +472,7 @@
   "compass": {
     "description": "Heading RMSE (degrees) during movement phases, median across trials",
     "metric": "Median heading RMSE in degrees",
-    "methodology": "The tilt-compensated compass uses Madgwick-derived gravity to project the magnetometer onto the horizontal plane. Heading output is compared to optical motion capture ground truth across 39 BROAD trials.",
+    "methodology": "The tilt-compensated compass uses Madgwick-derived gravity to project the magnetometer onto the horizontal plane. Heading output is compared to optical motion capture ground truth across 39 BROAD trials, after removing a constant per-trial heading offset fitted as the circular mean over the scored movement samples.",
     "notes": [
       "Compass accuracy degrades significantly during rotations and combined motions",
       "Heading is only meaningful when the device is relatively still — large errors during rotation are expected",
@@ -228,10 +486,10 @@
       "disturbed": "Disturbed"
     },
     "byTrialType": {
-      "translation": 5.05,
-      "rotation": 76.19,
-      "combined": 87.45,
-      "disturbed": 72.46
+      "translation": 3.58,
+      "rotation": 71.21,
+      "combined": 78.83,
+      "disturbed": 68.26
     },
     "detailedTypeLabels": {
       "slowTranslation": "Slow Translation",
@@ -243,98 +501,226 @@
     },
     "byDetailedType": {
       "undisturbed": {
-        "slowTranslation": 3.78,
-        "fastTranslation": 15.83
+        "slowTranslation": 3.15,
+        "fastTranslation": 13.49
       },
       "disturbed": {
-        "tappingVibration": 38.82,
-        "stationaryMagnet": 90.48,
-        "attachedMagnet": 71.83,
-        "officeMixed": 56.48
+        "tappingVibration": 30.98,
+        "stationaryMagnet": 74.2,
+        "attachedMagnet": 69.66,
+        "officeMixed": 53.74
       }
     },
     "params": {
       "smoothing": 0.15
     }
   },
-  "steps": {
-    "description": "Mean absolute step count error (%), 30 subjects",
-    "metric": "Mean absolute step count error as a percentage",
-    "methodology": "Each step counter processes 15 Hz accelerometer data from 30 subjects. Detected step counts are compared to hand-annotated ground truth step events. Error is |detected - ground_truth| / ground_truth × 100.",
+  "pdr": {
+    "description": "End-to-end pedestrian dead reckoning on IPIN Track 3 (no map, no radio)",
+    "metric": "Median horizontal error in metres at ground-truth landmarks",
+    "methodology": "Each filter processes the raw IMU stream of all 72 trials. Steps come from the adaptive step counter; each step advances position by a fixed stride along the filter's yaw. Mounting-yaw offset and stride length are calibrated on the first two ground-truth segments of a trial and scored on the remaining landmarks only. Yaw agreement is the circular median absolute difference against the phone's own AHRS after removing a single constant offset.",
     "notes": [
-      "Clemson data is 15 Hz, much lower than the 100 Hz the step counters are designed for",
-      "Hip placement gives the clearest signal; wrist and ankle placements are noisier due to arm swing and foot strike",
-      "Irregular gait (e.g. texting while walking) is challenging for all step counters",
-      "Windowed peak detection shows large improvements at the ankle across all gait types"
+      "The phone AHRS is a black-box reference, not ground truth — this column measures agreement, not accuracy",
+      "Pure step-and-heading dead reckoning with a constant stride; competition entries additionally fuse WiFi and floor plans, so these numbers benchmark the filters, not a localization system",
+      "The Complementary filter is included here because a per-trial heading offset is calibrated anyway, unlike the absolute-orientation benchmarks",
+      "The step counter and the Android step detector disagree systematically; which is closer to truth is unresolved on this corpus",
+      "The 2025 edition samples at ~50 Hz, below the 100 Hz the filters and step counter are tuned for; the 2022 edition is 100 Hz",
+      "Ground truth is sparse surveyed landmarks tens of seconds apart, so error between landmarks is unobserved",
+      "The 2022 corpus has no Android step detector events at all, so its step ratio is null rather than a number; the 2025 ratio is computed over all 72 trials",
+      "2022 scores 85 of 89 trials — four User05 trials carry no magnetometer or AHRS stream; all 72 of the 2025 trials are scored"
     ],
-    "dataset": "Clemson Pedometer (30 subjects, 15 Hz, 60k+ annotated steps)",
-    "url": "http://cecas.clemson.edu/~ahoover/pedometer/",
-    "gaitLabels": {
-      "regular": "Regular",
-      "semiregular": "Semi-Regular",
-      "irregular": "Irregular"
-    },
-    "placementLabels": {
-      "wrist": "Wrist",
-      "hip": "Hip",
-      "ankle": "Ankle"
-    },
-    "adaptiveThreshold": {
-      "byGaitAndPlacement": {
-        "regular": {
-          "wrist": 29.7,
-          "hip": 5.7,
-          "ankle": 22.8
-        },
-        "semiregular": {
-          "wrist": 49.7,
-          "hip": 48.0,
-          "ankle": 34.0
-        },
-        "irregular": {
-          "wrist": 46.8,
-          "hip": 56.2,
-          "ankle": 51.4
-        }
+    "dataset": "IPIN 2025 Track 3 Training Trials (72 trials, ~50 Hz, surveyed landmarks)",
+    "url": "https://competition.ipin-conference.org",
+    "ipin": {
+      "trials": 72,
+      "yawVsPhoneAhrs": {
+        "madgwick": 13.7,
+        "mahony": 8.5,
+        "ekf": 10.1,
+        "complementary": 17.6
       },
-      "byGait": {
-        "regular": 19.4,
-        "semiregular": 43.9,
-        "irregular": 51.5
+      "pdrMedianError": {
+        "madgwick": 19.3,
+        "mahony": 17.9,
+        "ekf": 17.7,
+        "complementary": 14.4
       },
-      "params": {
+      "robustness": {
+        "totalNanSamples": 0,
+        "quaternionNormMin": 1.0,
+        "quaternionNormMax": 1.0
+      },
+      "stepRatioVsAndroidDetector": 1.29
+    },
+    "ipin2022": {
+      "trials": 85,
+      "yawVsPhoneAhrs": {
+        "madgwick": 9.8,
+        "mahony": 5.0,
+        "ekf": 8.1,
+        "complementary": 13.8
+      },
+      "pdrMedianError": {
+        "madgwick": 12.1,
+        "mahony": 11.9,
+        "ekf": 12.0,
+        "complementary": 11.2
+      },
+      "robustness": {
+        "totalNanSamples": 0,
+        "quaternionNormMin": 1.0,
+        "quaternionNormMax": 1.0
+      },
+      "stepRatioVsAndroidDetector": null
+    },
+    "params": {
+      "madgwick": {
+        "beta": 0.05,
+        "betaMag": 0.3
+      },
+      "mahony": {
+        "kP": 0.7,
+        "kI": 0.01
+      },
+      "ekf": {
+        "processNoise": 0.01,
+        "accelNoise": 0.3,
+        "magNoise": 1.0
+      },
+      "complementary": {
+        "alpha": 0.997
+      },
+      "stepCounter": {
         "windowSize": 2.0,
         "cooldown": 0.35,
         "minAmplitude": 2.0
       }
-    },
-    "windowedPeak": {
-      "byGaitAndPlacement": {
-        "regular": {
-          "wrist": 31.7,
-          "hip": 4.9,
-          "ankle": 3.0
+    }
+  },
+  "steps": {
+    "description": "Step count error (%) per counter, by dataset",
+    "metric": "Mean absolute step count error as a percentage",
+    "notes": [
+      "Error is |detected - ground_truth| / ground_truth x 100, averaged over subjects",
+      "Both counters size their sliding window from an assumed 100 Hz sample rate, so the harness adjusts the window for datasets recorded at other rates. Their magnitude smoothing is a fixed per-sample filter with no dt term, which is not adjusted, so the effective smoothing time constant still varies with sample rate"
+    ],
+    "clemson": {
+      "description": "Mean absolute step count error (%) on scripted walking, by gait and placement",
+      "methodology": "Each step counter processes 15 Hz accelerometer data from 30 subjects. Detected step counts are compared to hand-annotated ground truth step events.",
+      "dataset": "Clemson Pedometer (30 subjects, 15 Hz, 60k+ annotated steps)",
+      "url": "http://cecas.clemson.edu/~ahoover/pedometer/",
+      "notes": [
+        "Clemson is 15 Hz, much lower than the 100 Hz the step counters are designed for",
+        "Hip placement gives the clearest signal; wrist and ankle placements are noisier due to arm swing and foot strike",
+        "Irregular gait (e.g. texting while walking) is challenging for all step counters",
+        "Windowed peak detection shows large improvements at the ankle across all gait types"
+      ],
+      "gaitLabels": {
+        "regular": "Regular",
+        "semiregular": "Semi-Regular",
+        "irregular": "Irregular"
+      },
+      "placementLabels": {
+        "wrist": "Wrist",
+        "hip": "Hip",
+        "ankle": "Ankle"
+      },
+      "adaptiveThreshold": {
+        "byGaitAndPlacement": {
+          "regular": {
+            "wrist": 29.7,
+            "hip": 5.7,
+            "ankle": 22.8
+          },
+          "semiregular": {
+            "wrist": 49.7,
+            "hip": 48.0,
+            "ankle": 34.0
+          },
+          "irregular": {
+            "wrist": 46.8,
+            "hip": 56.2,
+            "ankle": 51.4
+          }
         },
-        "semiregular": {
-          "wrist": 50.3,
-          "hip": 45.8,
-          "ankle": 17.6
+        "byGait": {
+          "regular": 19.4,
+          "semiregular": 43.9,
+          "irregular": 51.5
         },
-        "irregular": {
-          "wrist": 44.9,
-          "hip": 53.7,
-          "ankle": 29.3
+        "params": {
+          "windowSize": 2.0,
+          "cooldown": 0.35,
+          "minAmplitude": 2.0
         }
       },
-      "byGait": {
-        "regular": 13.2,
-        "semiregular": 37.9,
-        "irregular": 42.6
+      "windowedPeak": {
+        "byGaitAndPlacement": {
+          "regular": {
+            "wrist": 31.7,
+            "hip": 4.9,
+            "ankle": 3.0
+          },
+          "semiregular": {
+            "wrist": 50.3,
+            "hip": 45.8,
+            "ankle": 17.6
+          },
+          "irregular": {
+            "wrist": 44.9,
+            "hip": 53.7,
+            "ankle": 29.3
+          }
+        },
+        "byGait": {
+          "regular": 13.2,
+          "semiregular": 37.9,
+          "irregular": 42.6
+        },
+        "params": {
+          "windowSize": 0.6,
+          "cooldown": 0.3,
+          "minProminence": 1.5
+        }
+      }
+    },
+    "oxwalk": {
+      "description": "Mean absolute step count error (%) on free-living data, by placement and sample rate",
+      "dataset": "OxWalk (39 participants, ~1 h free-living each, 100 Hz and 25 Hz)",
+      "url": "https://ora.ox.ac.uk/objects/uuid:19d3cb34-e2b3-4177-91b6-1bad0e0163e7",
+      "notes": [
+        "Free-living rather than scripted walking, so non-walking arm and body movement is present throughout",
+        "Hip placement at 100 Hz is the closest analogue to a phone carried in a pocket",
+        "Wrist error is dominated by false positives, not missed steps: neither counter gates on whether the wearer is walking",
+        "Wrist at 100 Hz is much worse than the same recordings at 25 Hz because the counters' magnitude smoothing is a fixed per-sample filter (no dt term): at 100 Hz its effective time constant is 4x shorter, so high-frequency wrist jitter survives smoothing and is counted as steps, while at 25 Hz the same filter happens to smooth enough. A rate-aware smoother would remove this asymmetry; the shipped counters are published as-is",
+        "In the Sensor Logger app the step counter only ever runs on the phone accelerometer stream, never on watch or wrist data, so hip at 100 Hz is the product-relevant cell; the wrist columns document an out-of-scope boundary for library users",
+        "Ground truth is a per-sample heel-strike annotation from foot-facing video, already time-aligned"
+      ],
+      "adaptiveThreshold": {
+        "byPlacementAndRate": {
+          "hip": {
+            "25": 23.4,
+            "100": 10.1
+          },
+          "wrist": {
+            "25": 46.2,
+            "100": 240.1
+          }
+        },
+        "subjects": 39
       },
-      "params": {
-        "windowSize": 0.6,
-        "cooldown": 0.3,
-        "minProminence": 1.5
+      "windowedPeak": {
+        "byPlacementAndRate": {
+          "hip": {
+            "25": 21.4,
+            "100": 11.4
+          },
+          "wrist": {
+            "25": 50.0,
+            "100": 201.7
+          }
+        },
+        "subjects": 39
       }
     }
   }

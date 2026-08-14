@@ -197,76 +197,11 @@ The script prefers `AccelerometerUncalibrated.csv` over `Accelerometer.csv` when
 
 ## Evaluation Results
 
-All filters are validated against public research datasets and real device recordings. Summary results are also available in [`eval.json`](./eval.json).
+All algorithms are benchmarked against public research datasets (BROAD, Tyrex, Clemson, OxWalk, IPIN indoor localization competitions) and real device recordings, covering orientation accuracy against optical motion capture, magnetic disturbance robustness, step counting, compass heading, and end-to-end pedestrian dead reckoning.
 
-The Complementary filter is not included in the orientation benchmarks: it takes no magnetometer input, so its yaw is relative to initialisation and cannot be scored against the absolute heading in the ground truth.
-
-### Orientation — BROAD Dataset
-
-Tested on the [BROAD](https://github.com/dlaidig/broad) dataset (39 trials, 286 Hz downsampled to 100 Hz, 9-axis IMU with optical motion capture ground truth). Metrics are median angular RMSE in degrees during movement phases.
-
-| Filter                                | With Magnetometer | Without Magnetometer |
-| ------------------------------------- | :---------------: | :------------------: |
-| **Madgwick** (beta=0.05, betaMag=0.3) |       4.4°        |        16.9°         |
-| **Mahony** (kP=0.7, kI=0.01)          |       12.2°       |        22.4°         |
-| **EKF** (q=0.01, a=0.3, m=1.0)        |     **3.9°**      |        82.5°         |
-
-Under magnetic disturbances (nearby magnets, office environments):
-
-| Filter       | With Magnetometer | Without Magnetometer |
-| ------------ | :---------------: | :------------------: |
-| **Madgwick** |     **6.3°**      |      **10.8°**       |
-| **Mahony**   |       8.0°        |        23.3°         |
-| **EKF**      |       9.2°        |        99.3°         |
-
-The EKF's `magNoise` default of 1.0 was validated against alternatives: raising it to 3.0 improves roll/pitch similarity to the OS gravity sensor by 1–2° on real devices, but costs the EKF ~20° of ground-truth attitude accuracy on BROAD — including on the magnetically disturbed trials — because the weaker magnetometer correction lets yaw drift toward the no-magnetometer regime.
-
-### Orientation — Real Devices
-
-Gravity vector RMSE (degrees) vs system sensor, measured during 98-minute city walks on 5 devices. First 5 seconds excluded for filter convergence.
-
-| Device        | Madgwick Roll/Pitch | Mahony Roll/Pitch | EKF Roll/Pitch |
-| ------------- | :-----------------: | :---------------: | :------------: |
-| iPhone SE     |     2.9° / 2.6°     |    2.5° / 1.9°    |  3.2° / 1.8°   |
-| iPhone 17 Pro |    12.0° / 2.4°     |    7.4° / 1.4°    |  8.7° / 1.3°   |
-| Samsung S21   |    14.0° / 2.7°     |   10.8° / 1.2°    |  11.1° / 1.6°  |
-| Pixel 8       |     3.9° / 3.1°     |    2.3° / 3.2°    |  2.3° / 2.4°   |
-| Samsung S25   |    17.0° / 2.4°     |    5.7° / 1.3°    |  8.7° / 1.7°   |
-
-### Compass — BROAD Dataset
-
-Tilt-compensated compass (smoothing=0.15) heading RMSE, using Madgwick-derived gravity for tilt compensation:
-
-| Trial Type                        | Median Heading RMSE |
-| --------------------------------- | :-----------------: |
-| Translation (slow + fast)         |      **5.1°**       |
-| Rotation                          |        76.2°        |
-| Combined (rotation + translation) |        87.5°        |
-| Magnetically disturbed            |        72.5°        |
-
-Compass heading is most accurate during translation-only motion. Pure rotation and magnetic disturbances cause large heading errors, which is expected — the compass does not track gyroscope-integrated yaw.
-
-### Step Counter — Clemson Dataset
-
-Both step counters tested on the [Clemson Pedometer](http://cecas.clemson.edu/~ahoover/pedometer/) dataset (30 subjects, 15 Hz). Mean absolute error percentage:
-
-**Adaptive Threshold** (windowSize=2.0, cooldown=0.35, minAmplitude=2.0):
-
-| Gait Type    | Wrist |   Hip    | Ankle |
-| ------------ | :---: | :------: | :---: |
-| Regular      | 29.7% | **5.7%** | 22.8% |
-| Semi-Regular | 49.7% |  48.0%   | 34.0% |
-| Irregular    | 46.8% |  56.2%   | 51.4% |
-
-**Windowed Peak Detection** (windowSize=0.6, cooldown=0.3, minProminence=1.5):
-
-| Gait Type    | Wrist |   Hip    |  Ankle   |
-| ------------ | :---: | :------: | :------: |
-| Regular      | 31.7% | **4.9%** | **3.0%** |
-| Semi-Regular | 50.3% |  45.8%   |  17.6%   |
-| Irregular    | 44.9% |  53.7%   |  29.3%   |
-
-Windowed peak detection reduces overall mean absolute error from 38.3% to 31.2%, with the largest gains at the ankle (36.1% → 16.6% across all gaits). Both counters perform best at the hip during regular walking. The Clemson dataset is sampled at 15 Hz (vs the 100 Hz the counters are designed for), which partly explains the higher error rates. Semi-regular and irregular gaits are challenging across all placements.
+- **Explore the results interactively at [sensorlogger.app/zoo](https://sensorlogger.app/zoo)**
+- Machine-readable results with full methodology notes: [`eval.json`](./eval.json)
+- Benchmark harness, dataset download scripts, and everything needed to reproduce: [sensor-zoo-eval](https://github.com/tszheichoi/sensor-zoo-eval)
 
 ## Citation
 
