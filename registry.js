@@ -871,7 +871,7 @@ export const FUSION_CATEGORIES = {
   },
 };
 
-// Flat filter map — all filters across all categories, with key and categoryKey added
+// Flat filter map: all filters across all categories, with key and categoryKey added
 export const FUSION_FILTERS = {};
 for (const [categoryKey, category] of Object.entries(FUSION_CATEGORIES)) {
   for (const [filterKey, filterDef] of Object.entries(category.filters)) {

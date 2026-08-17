@@ -124,23 +124,17 @@ function mat3x3Inverse(M) {
 }
 
 // ── Constants ──────────────────────────────────────────────────────────
-// Gyro bias random walk noise — controls how fast bias estimates drift.
+// Gyro bias random walk noise: controls how fast bias estimates drift.
 const BIAS_PROCESS_NOISE = 1e-5;
 // If normalised accel magnitude deviates more than 15% from 1g,
 // inflate measurement noise to reduce accel correction during motion.
 const ACCEL_ADAPTIVE_THRESHOLD = 0.15;
-// Without a magnetometer, accelerometer measurement noise is additionally
-// inflated by (1 + k*|gyro|^2). During rotation the accelerometer direction
-// carries rotation-induced error, and in 6-axis operation the resulting
-// sequences of small tilt corrections compose into irreversible yaw drift
-// (there is no yaw reference to repair it). Trading tilt agility for yaw
-// stability is therefore right exactly when no magnetometer is present;
-// with one, the magnetometer repairs yaw and full agility is kept.
-// Validated on BROAD: 6-axis error drops from 58 to 13 degrees with
-// 9-axis results unchanged.
+// Without a usable magnetometer, accel noise is also inflated by
+// (1 + k*|gyro|²): tilt corrections during rotation compose into yaw drift,
+// and 6-axis has no reference to repair it. BROAD 6-axis: 58° → 13°.
 const NOMAG_GYRO_NOISE_SCALE = 20.0;
 // Magnetometer magnitude bounds for outlier rejection (µT).
-// Android calibrated magnetometers can report 100–150 µT; we
+// Android calibrated magnetometers can report 100-150 µT; we
 // normalise before use so magnitude only gates acceptance.
 const MAG_MIN_NORM = 10;
 const MAG_MAX_NORM = 200;
@@ -196,13 +190,9 @@ export class EKFFilter {
 
     // ─── Predict ───────────────────────────────────────────────────────
 
-    // Whether this update has a USABLE magnetometer sample: present, finite
-    // and within the outlier bounds. Presence alone is not enough. In a
-    // sustained magnetic disturbance the samples arrive but are rejected by
-    // the norm gate, so the filter is effectively running 6-axis and needs
-    // the 6-axis yaw protection below; keying that protection on presence
-    // would leave yaw unprotected in exactly the environments that reject
-    // the magnetometer.
+    // Usable, not merely present: in a sustained disturbance the samples
+    // arrive but fail the norm gate, leaving the filter effectively 6-axis
+    // and in need of the yaw protection below.
     const hasMag =
       magX != null && magY != null && magZ != null &&
       isFinite(magX) && isFinite(magY) && isFinite(magZ);
@@ -362,23 +352,15 @@ export class EKFFilter {
     S[6] += R[6]; S[7] += R[7]; S[8] += R[8];
 
     const SInv = mat3x3Inverse(S);
-    if (!SInv) return; // singular — skip update
+    if (!SInv) return; // singular, skip update
 
     // K = P·Hᵀ·S⁻¹ (6x3)
     const K = mat6x3Times3x3(PHT, SInv);
 
-    // Observability projection. The accelerometer observes tilt only:
-    // rotations about the gravity axis (yaw) and the matching bias
-    // component are unobservable from it. Without this projection, the
-    // Kalman gain still produces yaw and vertical-bias corrections through
-    // covariance cross terms, and in magnetometer-free operation those
-    // errors are never repaired: the filter invents a vertical gyro bias
-    // and yaw runs away at tenths of a degree per second. Projecting both
-    // the attitude rows and the bias rows of the gain onto the plane
-    // perpendicular to the (body-frame) gravity axis removes exactly the
-    // unobservable directions. The Joseph-form covariance update below is
-    // valid for any gain, so consistency is preserved and the yaw/bias-z
-    // variance is no longer spuriously reduced by accelerometer updates.
+    // The accelerometer observes tilt only, but covariance cross terms still
+    // produce yaw and vertical-bias corrections, and 6-axis never repairs
+    // them. Project the gain's attitude and bias rows off the gravity axis.
+    // Joseph form below stays valid for any gain.
     if (unobservableAxis) {
       const n = unobservableAxis;
       for (const base of [0, 3]) {

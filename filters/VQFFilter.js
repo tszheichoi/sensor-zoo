@@ -21,21 +21,17 @@ import {
  * Original: SPDX-License-Identifier: MIT
  * This port: MIT, adapted for sensor-zoo by the Sensor Logger project.
  *
- * The filter runs 6D (accelerometer + gyroscope) and 9D (+ magnetometer)
- * estimation simultaneously: gyroscope strapdown integration, low-pass
- * filtered inclination correction, a heading offset (delta) driven by the
- * magnetometer, gyroscope bias estimation during rest AND motion via a small
- * Kalman filter, and magnetic disturbance detection and rejection.
+ * Runs 6D (accel + gyro) and 9D (+ mag) estimation simultaneously, with gyro
+ * bias estimation during rest and motion and magnetic disturbance rejection.
  *
- * Deviations from the reference, kept deliberately small:
- * - The reference is constructed with a fixed sampling time. This port sets
- *   up its coefficients from the first observed dt and then uses the actual
- *   per-sample dt for gyroscope integration and time accumulators, so jitter
- *   in a live sensor stream is handled. Fed a constant dt, it is
+ * Deviations from the reference:
+ * - The reference takes a fixed sampling time. This port derives coefficients
+ *   from the first observed dt but integrates with the actual per-sample dt,
+ *   so a jittery live stream is handled. Fed a constant dt it is
  *   sample-for-sample identical to the reference.
- * - acos inputs are clamped to [-1, 1] to guard floating-point overshoot.
- * - update() returns the sensor-zoo standard output object; the quaternion is
- *   the 9D estimate when magnetometer data is supplied and 6D otherwise.
+ * - acos inputs are clamped to [-1, 1] against floating-point overshoot.
+ * - update() returns the sensor-zoo output object, using the 9D estimate when
+ *   magnetometer data is supplied and 6D otherwise.
  */
 
 const EPS = Number.EPSILON;
@@ -175,14 +171,15 @@ function filterVec(x, N, tau, Ts, b, a, state) {
 }
 
 export class VQFFilter {
-  // tauAcc and tauMag are the two primary tuning parameters (and the two the
-  // app exposes). Library users can override any other reference parameter,
+  // tauAcc and tauMag are the two primary tuning parameters. Any other
+  // reference parameter can be overridden via the third argument,
   // e.g. new VQFFilter(3, 9, { magDistRejectionEnabled: false }).
   constructor(tauAcc, tauMag, overrides) {
     this.params = { ...DEFAULTS, ...(overrides || {}) };
     if (tauAcc != null) this.params.tauAcc = tauAcc;
     if (tauMag != null) this.params.tauMag = tauMag;
     this.coeffs = null; // computed from the first observed dt
+    this._dtSamples = null; // collected until the sampling rate is confirmed
     this._resetState();
   }
 
@@ -223,12 +220,13 @@ export class VQFFilter {
     this.lastQ = [1, 0, 0, 0];
   }
 
-  // Matches the sensor-zoo filter interface. VQF initializes its own attitude
-  // from the first accelerometer sample (the inclination correction is a full
-  // snap on the first update), so init only resets state.
+  // Accelerometer arguments are unused: the first inclination correction is a
+  // full snap, so VQF finds its own attitude. Dropping coeffs matters: a
+  // second stream must re-derive its rate, not inherit the first one's.
   init() {
+    this.coeffs = null;
+    this._dtSamples = null;
     this._resetState();
-    if (this.coeffs) this.state.biasP = this._initialBiasP();
   }
 
   _initialBiasP() {
@@ -574,14 +572,9 @@ export class VQFFilter {
     }
 
     if (dt > 0) {
-      // Coefficients are derived from the sampling interval, but the first
-      // observed dt is often a burst artifact (real streams open with a few
-      // near-zero gaps before settling). Set up provisionally from the first
-      // dt, then once 40 samples have arrived compare against their median:
-      // on a >20% mismatch, rebuild the coefficients from the median and
-      // restart the internal filters while carrying the attitude over. With
-      // a steady stream the heal never triggers, so behaviour is identical
-      // to the reference. Integration always uses the actual dt.
+      // The first dt is often a burst artifact, so seed coefficients from it
+      // provisionally and rebuild from the median of 40 samples if they
+      // disagree by >20%. A steady stream never triggers the heal.
       if (this.coeffs === null) {
         this._setup(Math.min(Math.max(dt, 0.001), 0.1));
         this._dtSamples = [];

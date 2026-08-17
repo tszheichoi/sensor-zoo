@@ -94,7 +94,8 @@
     "notes": [
       "Default tuning parameters are used for all filters; per-trial tuning would yield lower errors",
       "The Complementary filter takes no magnetometer input, so its yaw is relative to initialisation and cannot be scored against absolute orientation; it is benchmarked in the pedestrian dead reckoning results instead",
-      "Before scoring, a constant heading offset (one rotation about gravity) is removed per trial, fitted over all scored samples, as is standard in the attitude benchmark literature: heading is unobservable without a magnetometer and ambiguous with one, while tilt stays absolute so constant tilt bias is measured, not forgiven."
+      "Before scoring, a constant heading offset (one rotation about gravity) is removed per trial, fitted over all scored samples, as is standard in the attitude benchmark literature: heading is unobservable without a magnetometer and ambiguous with one, while tilt stays absolute so constant tilt bias is measured, not forgiven.",
+      "BROAD is the benchmark published by VQF's own authors, and VQF's default parameters were tuned on it, so read its BROAD margin as a best case rather than a typical one. Tyrex is independent of every filter here and is the fairer comparison; VQF's advantage there is much smaller."
     ],
     "broad": {
       "methodology": "Each filter processes 39 BROAD trials offline. Orientation output is compared to optical motion capture ground truth using angular RMSE, computed only during movement phases, and the median across trials is reported.",
