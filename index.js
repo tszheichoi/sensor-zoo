@@ -11,4 +11,7 @@ export { TiltCompensatedCompass } from "./compass/TiltCompensatedCompass.js";
 export {
   FUSION_CATEGORIES,
   FUSION_FILTERS,
+  REQUIREMENTS,
+  makeEnabler,
+  sensorOn,
 } from "./registry.js";

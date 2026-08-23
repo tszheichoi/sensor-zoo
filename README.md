@@ -110,6 +110,16 @@ Computes magnetic bearing from raw magnetometer data, with optional tilt compens
 update(magX, magY, magZ, gravityX?, gravityY?, gravityZ?, dt) // returns { magneticBearing }
 ```
 
+## Registry Contract
+
+`registry.js` describes every filter to a consuming app: `inputs` (the sensors
+it reads, with `driverSensor` and `fallbacks`), `params` (user-tunable, with
+ranges and defaults), and `createFilter(params)`. Filters also declare the
+settings they need via `requirements` and `enableRequirements`, composed from
+the exported `REQUIREMENTS` library and `makeEnabler`. These are declared per
+filter, not per category, so two filters in one category can require different
+sensors: the complementary filter does not require a magnetometer.
+
 ## Quaternion Conventions
 
 - Quaternions are stored as `[w, x, y, z]` arrays.
@@ -202,7 +212,7 @@ Available filters: `madgwick`, `mahony`, `ekf`, `vqf`, `complementary`, `adaptiv
 
 ### Output columns
 
-- **Orientation** (`madgwick`, `mahony`, `ekf`, `complementary`): `time, qw, qx, qy, qz, roll, pitch, yaw, gravityX, gravityY, gravityZ, userAccelX, userAccelY, userAccelZ`. Euler angles in radians (aerospace intrinsic ZYX), gravity and user acceleration in m/s²
+- **Orientation** (`madgwick`, `mahony`, `ekf`, `vqf`, `complementary`): `time, qw, qx, qy, qz, roll, pitch, yaw, gravityX, gravityY, gravityZ, userAccelX, userAccelY, userAccelZ`. Euler angles in radians (aerospace intrinsic ZYX), gravity and user acceleration in m/s²
 - **Step counter** (`adaptiveThreshold`, `windowedPeak`): `time, steps`, the cumulative step count
 - **Compass** (`tiltCompensated`): `time, magneticBearing`, heading in degrees (0–360)
 
