@@ -2,6 +2,7 @@ import { ComplementaryFilter } from "./filters/ComplementaryFilter.js";
 import { MadgwickFilter } from "./filters/MadgwickFilter.js";
 import { MahonyFilter } from "./filters/MahonyFilter.js";
 import { EKFFilter } from "./filters/EKFFilter.js";
+import { VQFFilter } from "./filters/VQFFilter.js";
 import { AdaptiveStepCounter } from "./steps/AdaptiveStepCounter.js";
 import { WindowedPeakStepCounter } from "./steps/WindowedPeakStepCounter.js";
 import { TiltCompensatedCompass } from "./compass/TiltCompensatedCompass.js";
@@ -12,6 +13,80 @@ import {
   getSensorEnabled,
   getSensorSpeed,
 } from "./utils/defaults.js";
+
+// Requirements are declared per filter, composed from this shared library so
+// two filters in one category can need different sensors.
+
+export const sensorOn = (sensor) => ({
+  key: sensor.charAt(0).toLowerCase() + sensor.slice(1),
+  sensor,
+  label: `${sensor} Sensor On`,
+  check: (state) => getSensorEnabled(state, sensor),
+  required: "On",
+});
+
+export const REQUIREMENTS = {
+  standardise: {
+    key: "standardise",
+    label: "Standardisation On",
+    check: (state) => getStandardise(state),
+    required: "On",
+  },
+  uncalibrated: {
+    key: "uncalibrated",
+    label: "Uncalibrated Data On",
+    check: (state) => recordsUncalibrated(state),
+    required: "On",
+  },
+  accelerometer: sensorOn("Accelerometer"),
+  gyroscope: sensorOn("Gyroscope"),
+  magnetometer: sensorOn("Magnetometer"),
+  gravity: sensorOn("Gravity"),
+  compass: sensorOn("Compass"),
+  pedometer: sensorOn("Pedometer"),
+  inertialSpeed: {
+    key: "inertialSpeed",
+    label: "Inertial Sensor Sampling Rate at 100 Hz",
+    check: (state) => getSensorSpeed(state, "Accelerometer") === 10,
+    required: "100 Hz",
+    current: (state) => formatSpeed(getSensorSpeed(state, "Accelerometer")),
+  },
+  accelSpeed: {
+    key: "accelSpeed",
+    label: "Accelerometer Sampling Rate at 100 Hz",
+    check: (state) => getSensorSpeed(state, "Accelerometer") === 10,
+    required: "100 Hz",
+    current: (state) => formatSpeed(getSensorSpeed(state, "Accelerometer")),
+  },
+};
+
+// Builds a filter's enableRequirements.
+export function makeEnabler({
+  enable = [],
+  speed = [],
+  standardise = false,
+  liftUncalibrated = false,
+}) {
+  return (setState) => {
+    setState((state) => {
+      let sensorState = { ...state.sensorState };
+      enable.forEach((s) => {
+        sensorState[s] = { ...sensorState[s], enabled: true };
+      });
+      speed.forEach((s) => {
+        sensorState[s] = { ...sensorState[s], speed: 10 };
+      });
+      const update = { sensorState };
+      if (standardise) update.standardise = true;
+      if (liftUncalibrated && !recordsUncalibrated(state)) {
+        // only lift CalibratedOnly to Both; a user on UncalibratedOnly
+        // already satisfies the requirement and keeps their choice
+        update.uncalibrated = "Both";
+      }
+      return update;
+    });
+  };
+}
 
 export const FUSION_CATEGORIES = {
   orientation: {
@@ -59,79 +134,6 @@ export const FUSION_CATEGORIES = {
         resultMapping: { x: "userAccelX", y: "userAccelY", z: "userAccelZ" },
       },
     ],
-
-    requirements: [
-      {
-        key: "standardise",
-        label: "Standardisation On",
-        check: (state) => getStandardise(state),
-        required: "On",
-      },
-      {
-        key: "uncalibrated",
-        label: "Uncalibrated Data On",
-        check: (state) => recordsUncalibrated(state),
-        required: "On",
-      },
-      {
-        key: "accelerometer",
-        sensor: "Accelerometer",
-        label: "Accelerometer Sensor On",
-        check: (state) =>
-          getSensorEnabled(state, "Accelerometer"),
-        required: "On",
-      },
-      {
-        key: "gyroscope",
-        sensor: "Gyroscope",
-        label: "Gyroscope Sensor On",
-        check: (state) =>
-          getSensorEnabled(state, "Gyroscope"),
-        required: "On",
-      },
-      {
-        key: "magnetometer",
-        sensor: "Magnetometer",
-        label: "Magnetometer Sensor On",
-        check: (state) =>
-          getSensorEnabled(state, "Magnetometer"),
-        required: "On",
-      },
-      {
-        key: "inertialSpeed",
-        label: "Inertial Sensor Sampling Rate at 100 Hz",
-        check: (state) =>
-          getSensorSpeed(state, "Accelerometer") === 10,
-        required: "100 Hz",
-        current: (state) =>
-          formatSpeed(getSensorSpeed(state, "Accelerometer")),
-      },
-    ],
-
-    enableRequirements: (setState) => {
-      setState((state) => {
-        let sensorState = { ...state.sensorState };
-        ["Accelerometer", "Gyroscope", "Magnetometer"].forEach((s) => {
-          sensorState[s] = { ...sensorState[s], enabled: true };
-        });
-        [
-          "Accelerometer",
-          "Gravity",
-          "Gyroscope",
-          "Orientation",
-          "Magnetometer",
-        ].forEach((s) => {
-          sensorState[s] = { ...sensorState[s], speed: 10 };
-        });
-        const update = { standardise: true, sensorState };
-        if (!recordsUncalibrated(state)) {
-          // only lift CalibratedOnly to Both; a user on UncalibratedOnly
-          // already satisfies the requirement and keeps their choice
-          update.uncalibrated = "Both";
-        }
-        return update;
-      });
-    },
 
     systemDefault: {
       key: "system",
@@ -217,6 +219,20 @@ export const FUSION_CATEGORIES = {
           driverSensor: "Gyroscope",
           fallbacks: { AccelerometerUncalibrated: "Accelerometer" },
         },
+        // Does not read the magnetometer, so does not require or enable it.
+        requirements: [
+          REQUIREMENTS.standardise,
+          REQUIREMENTS.uncalibrated,
+          REQUIREMENTS.accelerometer,
+          REQUIREMENTS.gyroscope,
+          REQUIREMENTS.inertialSpeed,
+        ],
+        enableRequirements: makeEnabler({
+          enable: ["Accelerometer", "Gyroscope"],
+          speed: ["Accelerometer", "Gravity", "Gyroscope", "Orientation"],
+          standardise: true,
+          liftUncalibrated: true,
+        }),
         createFilter: (params) => new ComplementaryFilter(params.alpha),
         warnings: {
           orientation:
@@ -267,6 +283,26 @@ export const FUSION_CATEGORIES = {
           driverSensor: "Gyroscope",
           fallbacks: { AccelerometerUncalibrated: "Accelerometer" },
         },
+        requirements: [
+          REQUIREMENTS.standardise,
+          REQUIREMENTS.uncalibrated,
+          REQUIREMENTS.accelerometer,
+          REQUIREMENTS.gyroscope,
+          REQUIREMENTS.magnetometer,
+          REQUIREMENTS.inertialSpeed,
+        ],
+        enableRequirements: makeEnabler({
+          enable: ["Accelerometer", "Gyroscope", "Magnetometer"],
+          speed: [
+            "Accelerometer",
+            "Gravity",
+            "Gyroscope",
+            "Orientation",
+            "Magnetometer",
+          ],
+          standardise: true,
+          liftUncalibrated: true,
+        }),
         createFilter: (params) =>
           new MadgwickFilter(params.beta, params.betaMag),
         params: [
@@ -326,6 +362,26 @@ export const FUSION_CATEGORIES = {
           driverSensor: "Gyroscope",
           fallbacks: { AccelerometerUncalibrated: "Accelerometer" },
         },
+        requirements: [
+          REQUIREMENTS.standardise,
+          REQUIREMENTS.uncalibrated,
+          REQUIREMENTS.accelerometer,
+          REQUIREMENTS.gyroscope,
+          REQUIREMENTS.magnetometer,
+          REQUIREMENTS.inertialSpeed,
+        ],
+        enableRequirements: makeEnabler({
+          enable: ["Accelerometer", "Gyroscope", "Magnetometer"],
+          speed: [
+            "Accelerometer",
+            "Gravity",
+            "Gyroscope",
+            "Orientation",
+            "Magnetometer",
+          ],
+          standardise: true,
+          liftUncalibrated: true,
+        }),
         createFilter: (params) => new MahonyFilter(params.kP, params.kI),
         params: [
           {
@@ -385,6 +441,26 @@ export const FUSION_CATEGORIES = {
           driverSensor: "Gyroscope",
           fallbacks: { AccelerometerUncalibrated: "Accelerometer" },
         },
+        requirements: [
+          REQUIREMENTS.standardise,
+          REQUIREMENTS.uncalibrated,
+          REQUIREMENTS.accelerometer,
+          REQUIREMENTS.gyroscope,
+          REQUIREMENTS.magnetometer,
+          REQUIREMENTS.inertialSpeed,
+        ],
+        enableRequirements: makeEnabler({
+          enable: ["Accelerometer", "Gyroscope", "Magnetometer"],
+          speed: [
+            "Accelerometer",
+            "Gravity",
+            "Gyroscope",
+            "Orientation",
+            "Magnetometer",
+          ],
+          standardise: true,
+          liftUncalibrated: true,
+        }),
         createFilter: (params) =>
           new EKFFilter(
             params.processNoise,
@@ -430,6 +506,85 @@ export const FUSION_CATEGORIES = {
           },
         ],
       },
+      vqf: {
+        label: "VQF",
+        description:
+          "Versatile quaternion filter with gyro bias estimation and magnetic disturbance rejection (Laidig and Seel 2023).",
+        inputs: {
+          required: [
+            {
+              sensor: "AccelerometerUncalibrated",
+              role: "accelerometer",
+              title: "Total Acceleration",
+              detail:
+                "Raw accelerometer including gravity, without iOS bias correction.",
+            },
+            {
+              sensor: "Gyroscope",
+              role: "gyroscope",
+              title: "Rotation Rate",
+              detail: "Device angular velocity in radians per second.",
+            },
+          ],
+          optional: [
+            {
+              sensor: "Magnetometer",
+              role: "magnetometer",
+              title: "Magnetic Field",
+              detail: "Ambient magnetic field strength in microteslas.",
+            },
+          ],
+          driverSensor: "Gyroscope",
+          fallbacks: { AccelerometerUncalibrated: "Accelerometer" },
+        },
+        requirements: [
+          REQUIREMENTS.standardise,
+          REQUIREMENTS.uncalibrated,
+          REQUIREMENTS.accelerometer,
+          REQUIREMENTS.gyroscope,
+          REQUIREMENTS.magnetometer,
+          REQUIREMENTS.inertialSpeed,
+        ],
+        enableRequirements: makeEnabler({
+          enable: ["Accelerometer", "Gyroscope", "Magnetometer"],
+          speed: [
+            "Accelerometer",
+            "Gravity",
+            "Gyroscope",
+            "Orientation",
+            "Magnetometer",
+          ],
+          standardise: true,
+          liftUncalibrated: true,
+        }),
+        createFilter: (params) => new VQFFilter(params.tauAcc, params.tauMag),
+        params: [
+          {
+            key: "tauAcc",
+            stateKey: "TauAcc",
+            label: "Accelerometer Time Constant",
+            description:
+              "Time constant in seconds for accelerometer-based inclination correction. Higher values are smoother but slower to correct gyro drift.",
+            min: 0.5,
+            max: 10.0,
+            step: 0.5,
+            decimals: 1,
+            defaultValue: 3.0,
+          },
+          {
+            key: "tauMag",
+            stateKey: "TauMag",
+            label: "Magnetometer Time Constant",
+            description:
+              "Time constant in seconds for magnetometer-based heading correction. Higher values are smoother but slower to correct heading drift.",
+            min: 1.0,
+            max: 30.0,
+            step: 1.0,
+            decimals: 0,
+            defaultValue: 9.0,
+          },
+        ],
+      },
     },
   },
 
@@ -446,50 +601,6 @@ export const FUSION_CATEGORIES = {
         resultMapping: { steps: "steps" },
       },
     ],
-
-    requirements: [
-      {
-        key: "pedometer",
-        sensor: "Pedometer",
-        label: "Pedometer Sensor On",
-        check: (state) =>
-          getSensorEnabled(state, "Pedometer"),
-        required: "On",
-      },
-      {
-        key: "accelerometer",
-        sensor: "Accelerometer",
-        label: "Accelerometer Sensor On",
-        check: (state) =>
-          getSensorEnabled(state, "Accelerometer"),
-        required: "On",
-      },
-      {
-        key: "accelSpeed",
-        label: "Accelerometer Sampling Rate at 100 Hz",
-        check: (state) =>
-          getSensorSpeed(state, "Accelerometer") === 10,
-        required: "100 Hz",
-        current: (state) =>
-          formatSpeed(getSensorSpeed(state, "Accelerometer")),
-      },
-    ],
-
-    enableRequirements: (setState) => {
-      setState((state) => {
-        let sensorState = { ...state.sensorState };
-        sensorState["Pedometer"] = {
-          ...sensorState["Pedometer"],
-          enabled: true,
-        };
-        sensorState["Accelerometer"] = {
-          ...sensorState["Accelerometer"],
-          enabled: true,
-          speed: 10,
-        };
-        return { sensorState };
-      });
-    },
 
     systemDefault: {
       key: "system",
@@ -550,6 +661,15 @@ export const FUSION_CATEGORIES = {
           driverSensor: "AccelerometerUncalibrated",
           fallbacks: { AccelerometerUncalibrated: "Accelerometer" },
         },
+        requirements: [
+          REQUIREMENTS.pedometer,
+          REQUIREMENTS.accelerometer,
+          REQUIREMENTS.accelSpeed,
+        ],
+        enableRequirements: makeEnabler({
+          enable: ["Pedometer", "Accelerometer"],
+          speed: ["Accelerometer"],
+        }),
         createFilter: (params) =>
           new AdaptiveStepCounter(
             params.windowSize,
@@ -613,6 +733,15 @@ export const FUSION_CATEGORIES = {
           driverSensor: "AccelerometerUncalibrated",
           fallbacks: { AccelerometerUncalibrated: "Accelerometer" },
         },
+        requirements: [
+          REQUIREMENTS.pedometer,
+          REQUIREMENTS.accelerometer,
+          REQUIREMENTS.accelSpeed,
+        ],
+        enableRequirements: makeEnabler({
+          enable: ["Pedometer", "Accelerometer"],
+          speed: ["Accelerometer"],
+        }),
         createFilter: (params) =>
           new WindowedPeakStepCounter(
             params.windowSize,
@@ -676,50 +805,6 @@ export const FUSION_CATEGORIES = {
         resultMapping: { magneticBearing: "magneticBearing" },
       },
     ],
-
-    requirements: [
-      {
-        key: "standardise",
-        label: "Standardisation On",
-        check: (state) => getStandardise(state),
-        required: "On",
-      },
-      {
-        key: "compass",
-        sensor: "Compass",
-        label: "Compass Sensor On",
-        check: (state) => getSensorEnabled(state, "Compass"),
-        required: "On",
-      },
-      {
-        key: "magnetometer",
-        sensor: "Magnetometer",
-        label: "Magnetometer Sensor On",
-        check: (state) =>
-          getSensorEnabled(state, "Magnetometer"),
-        required: "On",
-      },
-      {
-        key: "gravity",
-        sensor: "Gravity",
-        label: "Gravity Sensor On",
-        check: (state) => getSensorEnabled(state, "Gravity"),
-        required: "On",
-      },
-    ],
-
-    enableRequirements: (setState) => {
-      setState((state) => {
-        let sensorState = { ...state.sensorState };
-        sensorState["Compass"] = { ...sensorState["Compass"], enabled: true };
-        sensorState["Magnetometer"] = {
-          ...sensorState["Magnetometer"],
-          enabled: true,
-        };
-        sensorState["Gravity"] = { ...sensorState["Gravity"], enabled: true };
-        return { standardise: true, sensorState };
-      });
-    },
 
     systemDefault: {
       key: "system",
@@ -791,6 +876,16 @@ export const FUSION_CATEGORIES = {
           driverSensor: "Magnetometer",
           fallbacks: {},
         },
+        requirements: [
+          REQUIREMENTS.standardise,
+          REQUIREMENTS.compass,
+          REQUIREMENTS.magnetometer,
+          REQUIREMENTS.gravity,
+        ],
+        enableRequirements: makeEnabler({
+          enable: ["Compass", "Magnetometer", "Gravity"],
+          standardise: true,
+        }),
         createFilter: (params) => new TiltCompensatedCompass(params.smoothing),
         params: [
           {
@@ -811,7 +906,7 @@ export const FUSION_CATEGORIES = {
   },
 };
 
-// Flat filter map — all filters across all categories, with key and categoryKey added
+// Flat filter map: all filters across all categories, with key and categoryKey added
 export const FUSION_FILTERS = {};
 for (const [categoryKey, category] of Object.entries(FUSION_CATEGORIES)) {
   for (const [filterKey, filterDef] of Object.entries(category.filters)) {

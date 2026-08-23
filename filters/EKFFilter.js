@@ -124,13 +124,17 @@ function mat3x3Inverse(M) {
 }
 
 // ── Constants ──────────────────────────────────────────────────────────
-// Gyro bias random walk noise — controls how fast bias estimates drift.
+// Gyro bias random walk noise: controls how fast bias estimates drift.
 const BIAS_PROCESS_NOISE = 1e-5;
 // If normalised accel magnitude deviates more than 15% from 1g,
 // inflate measurement noise to reduce accel correction during motion.
 const ACCEL_ADAPTIVE_THRESHOLD = 0.15;
+// Without a usable magnetometer, accel noise is also inflated by
+// (1 + k*|gyro|²): tilt corrections during rotation compose into yaw drift,
+// and 6-axis has no reference to repair it. BROAD 6-axis: 58° → 13°.
+const NOMAG_GYRO_NOISE_SCALE = 20.0;
 // Magnetometer magnitude bounds for outlier rejection (µT).
-// Android calibrated magnetometers can report 100–150 µT; we
+// Android calibrated magnetometers can report 100-150 µT; we
 // normalise before use so magnitude only gates acceptance.
 const MAG_MIN_NORM = 10;
 const MAG_MAX_NORM = 200;
@@ -185,6 +189,18 @@ export class EKFFilter {
     }
 
     // ─── Predict ───────────────────────────────────────────────────────
+
+    // Usable, not merely present: in a sustained disturbance the samples
+    // arrive but fail the norm gate, leaving the filter effectively 6-axis
+    // and in need of the yaw protection below.
+    const hasMag =
+      magX != null && magY != null && magZ != null &&
+      isFinite(magX) && isFinite(magY) && isFinite(magZ);
+    const magNorm = hasMag
+      ? Math.sqrt(magX * magX + magY * magY + magZ * magZ)
+      : 0;
+    const magUsable =
+      hasMag && magNorm >= MAG_MIN_NORM && magNorm <= MAG_MAX_NORM;
 
     // 1. Subtract bias
     const wx = gyroX - this.bias[0];
@@ -252,51 +268,51 @@ export class EKFFilter {
       if (normDev > ACCEL_ADAPTIVE_THRESHOLD) {
         rVal *= 1.0 + 10.0 * normDev * normDev;
       }
+      // 6-axis only: also inflate R with angular rate (see
+      // NOMAG_GYRO_NOISE_SCALE; conditioned on magUsable so that a present
+      // but norm-rejected magnetometer still gets the protection)
+      if (!magUsable) {
+        rVal *= 1.0 + NOMAG_GYRO_NOISE_SCALE * (wx * wx + wy * wy + wz * wz);
+      }
       const R = this._R; R.fill(0);
       R[0] = rVal; R[4] = rVal; R[8] = rVal;
 
-      this._kalmanUpdate(H, R, yAccel);
+      this._kalmanUpdate(H, R, yAccel, gEst);
     }
 
     // ─── Magnetometer Update ───────────────────────────────────────────
 
-    if (
-      magX != null && magY != null && magZ != null &&
-      isFinite(magX) && isFinite(magY) && isFinite(magZ)
-    ) {
-      const magNorm = Math.sqrt(magX * magX + magY * magY + magZ * magZ);
-      if (magNorm >= MAG_MIN_NORM && magNorm <= MAG_MAX_NORM) {
-        const mnx = magX / magNorm;
-        const mny = magY / magNorm;
-        const mnz = magZ / magNorm;
+    if (magUsable) {
+      const mnx = magX / magNorm;
+      const mny = magY / magNorm;
+      const mnz = magZ / magNorm;
 
-        // Rotate mag to earth frame
-        const h = quaternionRotateVector(this.q, [mnx, mny, mnz]);
+      // Rotate mag to earth frame
+      const h = quaternionRotateVector(this.q, [mnx, mny, mnz]);
 
-        // Reference direction: keep horizontal magnitude + vertical component
-        const bx = Math.sqrt(h[0] * h[0] + h[1] * h[1]);
-        const bz = h[2];
+      // Reference direction: keep horizontal magnitude + vertical component
+      const bx = Math.sqrt(h[0] * h[0] + h[1] * h[1]);
+      const bz = h[2];
 
-        // Rotate reference back to body frame
-        const qConj = [this.q[0], -this.q[1], -this.q[2], -this.q[3]];
-        const w = quaternionRotateVector(qConj, [bx, 0, bz]);
+      // Rotate reference back to body frame
+      const qConj = [this.q[0], -this.q[1], -this.q[2], -this.q[3]];
+      const w = quaternionRotateVector(qConj, [bx, 0, bz]);
 
-        // Innovation
-        const yMag = [mnx - w[0], mny - w[1], mnz - w[2]];
+      // Innovation
+      const yMag = [mnx - w[0], mny - w[1], mnz - w[2]];
 
-        // H_mag (3x6): [ skew(w)  0₃ₓ₃ ]
-        const Hm = this._Hm; Hm.fill(0);
-        Hm[0]  = 0;      Hm[1]  = -w[2]; Hm[2]  = w[1];
-        Hm[6]  = w[2];   Hm[7]  = 0;     Hm[8]  = -w[0];
-        Hm[12] = -w[1];  Hm[13] = w[0];  Hm[14] = 0;
+      // H_mag (3x6): [ skew(w)  0₃ₓ₃ ]
+      const Hm = this._Hm; Hm.fill(0);
+      Hm[0]  = 0;      Hm[1]  = -w[2]; Hm[2]  = w[1];
+      Hm[6]  = w[2];   Hm[7]  = 0;     Hm[8]  = -w[0];
+      Hm[12] = -w[1];  Hm[13] = w[0];  Hm[14] = 0;
 
-        // Magnetometer noise
-        const rmVal = this.magNoise * this.magNoise;
-        const Rm = this._Rm; Rm.fill(0);
-        Rm[0] = rmVal; Rm[4] = rmVal; Rm[8] = rmVal;
+      // Magnetometer noise
+      const rmVal = this.magNoise * this.magNoise;
+      const Rm = this._Rm; Rm.fill(0);
+      Rm[0] = rmVal; Rm[4] = rmVal; Rm[8] = rmVal;
 
-        this._kalmanUpdate(Hm, Rm, yMag);
-      }
+      this._kalmanUpdate(Hm, Rm, yMag);
     }
 
     // ─── Output ────────────────────────────────────────────────────────
@@ -323,7 +339,7 @@ export class EKFFilter {
 
   // Shared Kalman update for both accel and mag measurements
   // H: 3x6, R: 3x3, y: [3]
-  _kalmanUpdate(H, R, y) {
+  _kalmanUpdate(H, R, y, unobservableAxis = null) {
     const HT = transpose3x6(H);
 
     // P·Hᵀ (6x3)
@@ -336,10 +352,29 @@ export class EKFFilter {
     S[6] += R[6]; S[7] += R[7]; S[8] += R[8];
 
     const SInv = mat3x3Inverse(S);
-    if (!SInv) return; // singular — skip update
+    if (!SInv) return; // singular, skip update
 
     // K = P·Hᵀ·S⁻¹ (6x3)
     const K = mat6x3Times3x3(PHT, SInv);
+
+    // The accelerometer observes tilt only, but covariance cross terms still
+    // produce yaw and vertical-bias corrections, and 6-axis never repairs
+    // them. Project the gain's attitude and bias rows off the gravity axis.
+    // Joseph form below stays valid for any gain.
+    if (unobservableAxis) {
+      const n = unobservableAxis;
+      for (const base of [0, 3]) {
+        for (let c = 0; c < 3; c++) {
+          const t =
+            n[0] * K[(base + 0) * 3 + c] +
+            n[1] * K[(base + 1) * 3 + c] +
+            n[2] * K[(base + 2) * 3 + c];
+          K[(base + 0) * 3 + c] -= n[0] * t;
+          K[(base + 1) * 3 + c] -= n[1] * t;
+          K[(base + 2) * 3 + c] -= n[2] * t;
+        }
+      }
+    }
 
     // Error-state correction: dx = K·y (6x1)
     const dx = this._dx;
