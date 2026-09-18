@@ -13,7 +13,8 @@ for (let i = 0; i < args.length; i++) {
   else if (!args[i].startsWith("--")) recordingDir = args[i];
 }
 
-const names = Object.keys(FUSION_FILTERS).join(", ");
+const runnable = (key) => FUSION_FILTERS[key].categoryKey !== "location";
+const names = Object.keys(FUSION_FILTERS).filter(runnable).join(", ");
 
 if (!recordingDir) {
   process.stderr.write(
@@ -27,7 +28,7 @@ if (!existsSync(recordingDir) || !statSync(recordingDir).isDirectory()) {
 }
 
 const filterDef = FUSION_FILTERS[filterName];
-if (!filterDef) {
+if (!filterDef || !runnable(filterName)) {
   process.stderr.write(
     `Error: unknown filter "${filterName}". Options: ${names}\n`,
   );

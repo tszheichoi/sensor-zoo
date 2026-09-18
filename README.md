@@ -1,6 +1,6 @@
 # Sensor Zoo
 
-Open-source, pure JavaScript implementations of real-time sensor fusion algorithms for mobile and embedded devices. Currently three categories are supported: orientation (AHRS) and related quantities such as gravity vector and user acceleration; step counting; and compass heading.
+Open-source, pure JavaScript implementations of real-time sensor fusion algorithms for mobile and embedded devices. Currently four categories are supported: orientation (AHRS) and related quantities such as gravity vector and user acceleration; step counting; compass heading; and linear referencing, which positions a fix along a route you supply.
 
 ## Why
 
@@ -96,6 +96,22 @@ Detects footsteps by finding local maxima (peaks) in low-pass-filtered accelerat
 
 ```js
 update(accelX, accelY, accelZ, dt); // returns { steps }
+```
+
+## Linear Referencing
+
+### Route Position Filter
+
+Projects a location fix onto a route you supply, reporting distance travelled along it, the route's own label at that point, and perpendicular offset from it. The route is a GeoJSON LineString, so it can come from QGIS, geojson.io, OSM or GPX, with labels on a parallel `properties.values` array, one entry per vertex. Labels are a position in your own reference system -- a milepost, a bridge, a level crossing. Numeric labels are interpolated between the two that bracket the fix; a route carrying any name rather than a number is categorical throughout and reports the nearest label whole.
+
+Projection is onto segments rather than vertices, so position is continuous rather than quantised to the vertex spacing, and tracking is continuous rather than a global search each fix, so a route that doubles back or crosses itself is followed correctly.
+
+- `route`: GeoJSON holding one LineString, with optional `properties.values` labels
+- `maxOffset`: metres from the route beyond which the fix is reported as off-route
+- `maxSpeed`: metres/second, bounding how far along the route the tracker may advance between fixes
+
+```js
+update(latitude, longitude, dt); // returns { distance, marker, offset }
 ```
 
 ## Compass

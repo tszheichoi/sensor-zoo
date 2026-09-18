@@ -36,3 +36,8 @@ export function getSensorEnabled() {
 export function getSensorSpeed() {
   return 10;
 }
+
+/** Returns "Precise" — coordinates are assumed not to be cloaked. */
+export function getCoordinatesCloaking() {
+  return "Precise";
+}
