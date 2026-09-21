@@ -6,12 +6,15 @@ import { VQFFilter } from "./filters/VQFFilter.js";
 import { AdaptiveStepCounter } from "./steps/AdaptiveStepCounter.js";
 import { WindowedPeakStepCounter } from "./steps/WindowedPeakStepCounter.js";
 import { TiltCompensatedCompass } from "./compass/TiltCompensatedCompass.js";
+import { RoutePositionFilter } from "./route/RoutePositionFilter.js";
+import { routeToGeoJSON } from "./route/encoding.js";
 import { formatSpeed } from "./utils/format.js";
 import {
   getStandardise,
   recordsUncalibrated,
   getSensorEnabled,
   getSensorSpeed,
+  getCoordinatesCloaking,
 } from "./utils/defaults.js";
 
 // Requirements are declared per filter, composed from this shared library so
@@ -58,6 +61,13 @@ export const REQUIREMENTS = {
     required: "100 Hz",
     current: (state) => formatSpeed(getSensorSpeed(state, "Accelerometer")),
   },
+  preciseCoordinates: {
+    key: "preciseCoordinates",
+    label: "Coordinates Cloaking Off",
+    check: (state) => getCoordinatesCloaking(state) === "Precise",
+    required: "Precise",
+    current: (state) => getCoordinatesCloaking(state),
+  },
 };
 
 // Builds a filter's enableRequirements.
@@ -66,6 +76,7 @@ export function makeEnabler({
   speed = [],
   standardise = false,
   liftUncalibrated = false,
+  preciseCoordinates = false,
 }) {
   return (setState) => {
     setState((state) => {
@@ -78,6 +89,7 @@ export function makeEnabler({
       });
       const update = { sensorState };
       if (standardise) update.standardise = true;
+      if (preciseCoordinates) update.coordinatesCloaking = "Precise";
       if (liftUncalibrated && !recordsUncalibrated(state)) {
         // only lift CalibratedOnly to Both; a user on UncalibratedOnly
         // already satisfies the requirement and keeps their choice
@@ -899,6 +911,131 @@ export const FUSION_CATEGORIES = {
             step: 0.01,
             decimals: 2,
             defaultValue: 0.15,
+          },
+        ],
+      },
+    },
+  },
+
+  location: {
+    key: "zooLocation",
+    label: "Location",
+    description: "Post-processing of Location fixes.",
+
+    outputs: [
+      {
+        appends: "Location",
+        title: "Route Position",
+        detail:
+          "Distance along the route in metres, the route's label at that " +
+          "point, and perpendicular offset in metres. The label is " +
+          "interpolated between the two nearest labelled points when every " +
+          "label is a number, and is the nearest label itself when any of " +
+          "them is a name.",
+        resultMapping: {
+          alongTrack: "distance",
+          routeValue: "marker",
+          crossTrack: "offset",
+        },
+      },
+    ],
+
+    systemDefault: {
+      key: "system",
+      label: "System Default",
+      description: "Location recorded as reported by the device.",
+    },
+
+    createProcessor: (filter) => {
+      let lastTime = null;
+      return {
+        onData(data) {
+          if (data.name !== "location") return null;
+          let dt = lastTime != null ? (data.time - lastTime) / 1e9 : 0;
+          lastTime = data.time;
+          if (!(dt > 0) || dt > 3600) dt = 0;
+          const result = filter.update(
+            data.values.latitude,
+            data.values.longitude,
+            dt,
+          );
+          const marker =
+            typeof result?.marker === "string"
+              ? result.marker.replace(/[,\r\n]/g, " ")
+              : (result?.marker ?? null);
+          return {
+            distance: result?.distance ?? null,
+            marker,
+            offset: result?.offset ?? null,
+          };
+        },
+      };
+    },
+
+    filters: {
+      linearReferencing: {
+        label: "Linear Referencing",
+        description:
+          "Projects each Location fix onto the nearest segment of a route you define, giving a custom label and the distance along the route.",
+        inputs: {
+          required: [
+            {
+              sensor: "Location",
+              role: "location",
+              title: "Location",
+              detail: "GPS fixes to project onto the route.",
+            },
+          ],
+          optional: [],
+          driverSensor: "Location",
+          fallbacks: {},
+        },
+        requirements: [sensorOn("Location"), REQUIREMENTS.preciseCoordinates],
+        enableRequirements: makeEnabler({
+          enable: ["Location"],
+          preciseCoordinates: true,
+        }),
+        createFilter: (params) =>
+          new RoutePositionFilter(
+            routeToGeoJSON(params.route),
+            params.maxOffset,
+            params.maxSpeed,
+          ),
+        params: [
+          {
+            key: "route",
+            stateKey: "Route",
+            type: "route",
+            label: "Route",
+            description:
+              "The line fixes are projected onto, with the labels that give " +
+              "each point its position.",
+            defaultValue: null,
+          },
+          {
+            key: "maxOffset",
+            stateKey: "MaxOffset",
+            label: "Maximum Offset",
+            description:
+              "Metres from the route before a fix counts as off-route.",
+            min: 5,
+            max: 500,
+            step: 5,
+            decimals: 0,
+            defaultValue: 50,
+          },
+          {
+            key: "maxSpeed",
+            stateKey: "MaxSpeed",
+            label: "Maximum Speed",
+            description:
+              "Metres per second. Caps how far along the route a fix may " +
+              "advance from the last one.",
+            min: 1,
+            max: 150,
+            step: 1,
+            decimals: 0,
+            defaultValue: 90,
           },
         ],
       },

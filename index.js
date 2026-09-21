@@ -8,6 +8,13 @@ export { VQFFilter } from "./filters/VQFFilter.js";
 export { AdaptiveStepCounter } from "./steps/AdaptiveStepCounter.js";
 export { WindowedPeakStepCounter } from "./steps/WindowedPeakStepCounter.js";
 export { TiltCompensatedCompass } from "./compass/TiltCompensatedCompass.js";
+export { RoutePositionFilter } from "./route/RoutePositionFilter.js";
+export {
+  encodeRoute,
+  decodeRoutePoints,
+  routeToGeoJSON,
+  routeProblem,
+} from "./route/encoding.js";
 export {
   FUSION_CATEGORIES,
   FUSION_FILTERS,
