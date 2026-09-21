@@ -119,8 +119,7 @@ export class RoutePositionFilter {
   }
 
   init() {
-    this.index = null; // segment index of the last accepted fix
-    this.distance = null;
+    this.distance = null; // distance along the route of the last accepted fix
   }
 
   update(latitude, longitude, dt) {
@@ -136,7 +135,7 @@ export class RoutePositionFilter {
 
     let from = 0;
     let to = this.segmentLength.length - 1;
-    if (this.index != null) {
+    if (this.distance != null) {
       const reach = this.maxSpeed * Math.max(dt || 0, 1) + this.maxOffset;
       from = this.#indexAtDistance(this.distance - reach);
       to = this.#indexAtDistance(this.distance + reach);
@@ -145,12 +144,10 @@ export class RoutePositionFilter {
     const hit = this.#project(latitude, longitude, from, to);
 
     if (hit == null || hit.offset > this.maxOffset) {
-      this.index = null;
       this.distance = null;
       return { distance: null, marker: null, offset: null };
     }
 
-    this.index = hit.index;
     this.distance = hit.distance;
 
     return {
@@ -191,7 +188,7 @@ export class RoutePositionFilter {
 
       if (offset < bestOffset) {
         bestOffset = offset;
-        best = { index: i, distance: this.cumulative[i] + t * len, offset };
+        best = { distance: this.cumulative[i] + t * len, offset };
       }
     }
     return best;
@@ -235,8 +232,4 @@ export class RoutePositionFilter {
     }
     return lo;
   }
-}
-
-export function routeMarkers(route) {
-  return new RoutePositionFilter(route, 1, 1).markers;
 }
